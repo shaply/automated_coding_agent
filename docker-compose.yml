@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data          # session state, SQLite usage DB, logs — NOT the working repo
+    env_file:
+      - backend/.env          # API keys, AUTODEV_API_TOKEN
+    environment:
+      - AUTODEV_DATA_DIR=/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://backend:8000
+      # VITE_API_TOKEN must match AUTODEV_API_TOKEN — set via .env or override here
+    env_file:
+      - frontend/.env
+    depends_on:
+      - backend
+    restart: unless-stopped

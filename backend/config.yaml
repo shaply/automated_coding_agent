@@ -1,0 +1,44 @@
+agent:
+  max_self_correction_attempts: 3   # per step, before surfacing failure to user
+  max_steps_per_session: 20         # safety cap on total plan steps executed per run
+
+project:
+  github_repo: your-username/your-repo   # repo to clone per task
+  test_command: pytest                   # command to run after every implementation step
+  lint_command: ruff check .             # linter to run before tests
+
+schedule:
+  enabled: true
+  time: "23:30"                     # run daily at 11:30 PM
+  timezone: "America/New_York"      # used for SQLite daily budget resets
+
+engine:
+  provider: aider                   # swap to "my_engine" in Phase 10
+
+providers:
+  claude:
+    model: claude-3-5-sonnet-20241022
+    daily_token_budget: 25000       # free tier daily token limit
+    rpm_limit: 5                    # requests per minute (free tier)
+    tpm_limit: 25000                # tokens per minute (free tier)
+    context_window: 200000
+    min_request_interval: 12.0      # seconds between requests (60 / rpm_limit + buffer)
+  gemini:
+    model: gemini/gemini-1.5-flash
+    daily_token_budget: 1500        # requests per day on free tier
+    rpm_limit: 15
+    tpm_limit: 1000000
+    context_window: 1000000
+    min_request_interval: 4.0
+  groq:
+    model: groq/llama-3.1-70b-versatile
+    daily_token_budget: 100000
+    rpm_limit: 30
+    tpm_limit: 6000
+    context_window: 128000
+    min_request_interval: 2.0
+  fallback_order: [claude, gemini, groq]
+  max_retries: 5                    # per provider before triggering fallback
+
+ui:
+  step_by_step: false               # pause between each plan step for micro-review
