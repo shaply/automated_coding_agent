@@ -7,6 +7,7 @@ LiteLLM wrapper with:
 - Respect for Retry-After headers
 """
 
+import os
 import time
 import random
 import logging
@@ -23,9 +24,29 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     def __init__(self, providers_config: dict, fallback_order: list[str], usage_db: UsageDB):
         self.providers = providers_config  # keyed by provider name
-        self.fallback_order = fallback_order
         self.usage_db = usage_db
         self._last_request_ts: dict[str, float] = {}  # provider → unix timestamp
+
+        # Build effective fallback order: skip providers with no API key configured.
+        self.fallback_order: list[str] = []
+        for provider in fallback_order:
+            cfg = providers_config.get(provider, {})
+            key_env = cfg.get("api_key_env")
+            if key_env and not os.environ.get(key_env):
+                logger.warning(
+                    "Provider '%s' skipped — env var %s is not set. "
+                    "Set it in .env to enable this provider.",
+                    provider, key_env,
+                )
+                continue
+            self.fallback_order.append(provider)
+
+        if not self.fallback_order:
+            raise RuntimeError(
+                "No LLM providers are configured with API keys. "
+                "Set at least one provider key in your .env file."
+            )
+        logger.info("Active LLM providers (in fallback order): %s", self.fallback_order)
 
     def _throttle(self, provider: str) -> None:
         """Enforce minimum inter-request delay to stay under RPM limits."""

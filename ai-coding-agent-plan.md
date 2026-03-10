@@ -631,13 +631,13 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ### PHASE 2 — Planning Loop + Early Test Execution
 *Goal: the AI plans before it codes, tests run automatically after every step*
 
-- [ ] `planner.py`: generate a structured plan (numbered steps, files to touch, risks)
-- [ ] Plan review in CLI: display plan, accept free-text comments
-- [ ] Refinement loop: re-prompt AI with your comments, repeat until approved
-- [ ] Approval gate: implementation does not start until user types "approve"
-- [ ] **Linter + test runner after every implementation step** — agent self-corrects on failure before surfacing to you
-- [ ] **`max_self_correction_attempts` cap** — after N failed attempts per step, surface failure to user instead of burning more credits
-- [ ] Session state now tracks: current plan, step index, comment history, test results per step
+- [x] `planner.py`: generate a structured plan (numbered steps, files to touch, risks)
+- [x] Plan review in CLI: display plan, accept free-text comments
+- [x] Refinement loop: re-prompt AI with your comments, repeat until approved
+- [x] Approval gate: implementation does not start until user types "approve"
+- [x] **Linter + test runner after every implementation step** — agent self-corrects on failure before surfacing to you
+- [x] **`max_self_correction_attempts` cap** — after N failed attempts per step, surface failure to user instead of burning more credits
+- [x] Session state now tracks: current plan, step index, comment history, test results per step
 
 **Exit criteria:** Full plan → review → refine → approve → code → per-step tests → diff loop works end-to-end. Agent catches its own syntax errors without human review.
 

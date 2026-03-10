@@ -18,6 +18,7 @@ engine:
 providers:
   claude:
     model: claude-3-5-sonnet-20241022
+    api_key_env: ANTHROPIC_API_KEY  # env var name; provider is skipped if unset
     daily_token_budget: 25000       # free tier daily token limit
     rpm_limit: 5                    # requests per minute (free tier)
     tpm_limit: 25000                # tokens per minute (free tier)
@@ -25,6 +26,7 @@ providers:
     min_request_interval: 12.0      # seconds between requests (60 / rpm_limit + buffer)
   gemini:
     model: gemini/gemini-1.5-flash
+    api_key_env: GEMINI_API_KEY
     daily_token_budget: 1500        # requests per day on free tier
     rpm_limit: 15
     tpm_limit: 1000000
@@ -32,6 +34,7 @@ providers:
     min_request_interval: 4.0
   groq:
     model: groq/llama-3.1-70b-versatile
+    api_key_env: GROQ_API_KEY
     daily_token_budget: 100000
     rpm_limit: 30
     tpm_limit: 6000

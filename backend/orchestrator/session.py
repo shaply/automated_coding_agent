@@ -28,6 +28,14 @@ AgentStatus = Literal[
 
 
 @dataclass
+class StepTestResult:
+    step: int
+    attempt: int
+    passed: bool
+    output: str
+
+
+@dataclass
 class SessionState:
     task_id: str
     status: AgentStatus = "idle"
@@ -36,6 +44,8 @@ class SessionState:
     plan_comments: list[str] = field(default_factory=list)
     current_step: int = 0
     completed_steps: list[int] = field(default_factory=list)
+    # Per-step test results (Phase 2): list of dicts with step/attempt/passed/output
+    step_test_results: list[dict] = field(default_factory=list)
     partial_diff: str = ""
     halt_reason: str = ""
     branch_name: str = ""
