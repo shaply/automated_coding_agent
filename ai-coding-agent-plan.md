@@ -1,6 +1,6 @@
 # AutoDev — Refined Project Plan
 
-*An automated, human-in-the-loop AI coding agent*
+*An automated, human-in-the-loop AI coding agent*.
 
 ---
 
@@ -14,7 +14,7 @@ Longer term, AutoDev registers as a robot in RoboMesh, your robot management sys
 
 ## Long-Term Integration Picture
 
-```
+```text
 RoboMesh (Go + Svelte)
 ├── roboserver              ← central hub, orchestrates all robots
 │   ├── physical robots     ← existing C/C++ robot clients
@@ -38,7 +38,7 @@ RoboMesh can be found here: <https://github.com/shaply/Robomesh>.
 
 ## Core Architecture
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
 │                        ORCHESTRATOR                        │
 │                (Python — while loop → LangGraph)           │
@@ -81,7 +81,7 @@ RoboMesh can be found here: <https://github.com/shaply/Robomesh>.
 
 ## Workflow
 
-```
+```text
 START (scheduled or manual trigger)
          │
          ▼
@@ -156,7 +156,7 @@ START (scheduled or manual trigger)
 
 ## Project Structure
 
-```
+```text
 autodev/
 ├── docker-compose.yml                 # Mini PC deployment
 ├── Dockerfile                         # Agent container
@@ -216,7 +216,7 @@ autodev/
 
 Designed to be called by your Svelte UI today, and by RoboMesh's `roboserver` in the future. The contract doesn't change — only who's calling it does.
 
-```
+```text
 POST   /tasks                   → create a new task (manual or from issue)
 GET    /tasks                   → list all tasks (history)
 GET    /tasks/{id}              → get task detail + current state
@@ -351,7 +351,7 @@ When you eventually want to swap Aider out, you write a new class that inherits 
 ## Tech Stack
 
 | Component | Tool | Why |
-|---|---|---|
+| --- | --- | --- |
 | Agent language | Python 3.11+ | Best AI/LLM ecosystem, required for Aider |
 | Agent framework | while loop → LangGraph | Simple loop in Ph1-2; LangGraph added in Ph3 when async state management is actually needed |
 | LLM routing | LiteLLM | Single API for Claude, Gemini, Groq. Built-in quota tracking |
@@ -373,7 +373,7 @@ When you eventually want to swap Aider out, you write a new class that inherits 
 
 AutoDev runs on your mini PC as a persistent Docker container. The mounted volume only holds session state, logs, and the SQLite usage database — never the live working repo. Each task gets a fresh ephemeral clone inside the container that is wiped after approval or rejection.
 
-```
+```text
 Mini PC (always on)
 ├── Docker: autodev-backend  (Python + FastAPI, port 8000)
 └── Docker: autodev-frontend (Svelte, port 5173)
@@ -444,7 +444,7 @@ Key rules:
 
 Before every scheduled run, the agent checks the state of the repo. It never attempts to resolve conflicts autonomously.
 
-```
+```text
 On startup:
   1. Check for uncommitted changes → HALT if dirty
   2. Check for unresolved merge conflicts → HALT if any
@@ -467,7 +467,7 @@ The agent is single-threaded by design — it runs one task at a time. This crea
 
 **Scheduler fires while a task is in progress:**
 
-```
+```text
 If agent state is anything other than "idle" at scheduled run time:
   → Skip this scheduled run entirely
   → Log: "Scheduled run skipped — task {id} already in progress"
@@ -476,7 +476,7 @@ If agent state is anything other than "idle" at scheduled run time:
 
 **Manual task created via POST /tasks while agent is busy:**
 
-```
+```text
 If agent state is not "idle":
   → Return HTTP 409 Conflict
   → Body: { "error": "Agent busy", "current_task": "{id}", "state": "{state}" }
@@ -491,7 +491,7 @@ This keeps the agent simple and predictable. A task queue can be added later if 
 
 When all providers are exhausted mid-task, the agent halts with partial work done. The behavior must be defined explicitly:
 
-```
+```text
 On credit exhaustion mid-implementation:
   1. Finish the current step cleanly (do not interrupt mid-edit)
   2. Save session state: { task_id, plan, last_completed_step, partial_diff }
@@ -526,7 +526,7 @@ Free tiers impose several distinct types of limits, all of which need to be hand
 ### The Four Limit Types
 
 | Limit | What it is | Consequence if ignored |
-|---|---|---|
+| --- | --- | --- |
 | **Daily token budget** | Max tokens per calendar day | Agent blows past free tier, incurs charges |
 | **RPM** (requests per minute) | Max API calls per 60s window | 429 error mid-implementation step, task crash |
 | **TPM** (tokens per minute) | Max tokens processed per 60s | 429 even with daily budget remaining |
@@ -637,7 +637,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 2 — Planning Loop + Early Test Execution
 
-*Goal: the AI plans before it codes, tests run automatically after every step*
+*Goal: the AI plans before it codes, tests run automatically after every step*.
 
 - [x] `planner.py`: generate a structured plan (numbered steps, files to touch, risks)
 - [x] Plan review in CLI: display plan, accept free-text comments
@@ -653,7 +653,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 3 — Docker + FastAPI Backend + LangGraph
 
-*Goal: move off CLI, get the agent running as a proper service; introduce LangGraph now that async state management is needed*
+*Goal: move off CLI, get the agent running as a proper service; introduce LangGraph now that async state management is needed*.
 
 - [x] **Bearer token auth middleware** (`auth.py`): every endpoint requires `Authorization: Bearer <token>`, returns 401 otherwise
 - [x] **Concurrency enforcement**: `POST /tasks` returns 409 if agent is not idle; scheduler skips if agent is busy
@@ -671,7 +671,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 4 — Svelte Frontend
 
-*Goal: browser-based review UI replacing the CLI*
+*Goal: browser-based review UI replacing the CLI*.
 
 - [x] Svelte + TypeScript project setup, typed API client (`api.ts`)
 - [x] Dashboard page: current task status, agent state (including `halted`), token usage
@@ -689,7 +689,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 5 — GitHub Integration
 
-*Goal: connect to a real project with issues and PRs*
+*Goal: connect to a real project with issues and PRs*.
 
 - [x] `github_client.py`: authenticate, list issues assigned to you, fetch issue body + comments
 - [x] Issue-as-task: surface assigned issues in the UI as selectable task options
@@ -703,7 +703,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 6 — Scheduler + Multi-Provider Credit Routing
 
-*Goal: runs automatically every day, burns the right provider's free credits, survives restarts*
+*Goal: runs automatically every day, burns the right provider's free credits, survives restarts*.
 
 - [x] APScheduler integration: run at configured time daily (or on demand via API)
 - [x] `usage_db.py`: SQLite token budget tracking — survives restarts, resets by calendar date in configured timezone
@@ -721,7 +721,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 7 — Implementation Controls
 
-*Goal: more granular mid-task control*
+*Goal: more granular mid-task control*.
 
 - [ ] Mid-implementation comment injection via UI (calls `engine.inject_comment()`)
 - [ ] Step-by-step mode: optionally pause between each plan step for micro-review in browser
@@ -733,7 +733,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 
 ### PHASE 8 — RoboMesh Integration
 
-*Goal: AutoDev becomes a robot managed by RoboMesh*
+*Goal: AutoDev becomes a robot managed by RoboMesh*.
 
 This phase requires RoboMesh to be sufficiently developed to support external robot clients with a defined protocol.
 
@@ -749,7 +749,7 @@ This phase requires RoboMesh to be sufficiently developed to support external ro
 
 ### PHASE 9 — Context Intelligence Upgrade
 
-*Goal: handle large codebases without hitting token limits*
+*Goal: handle large codebases without hitting token limits*.
 
 - [ ] Study SWE-agent's Agent-Computer Interface (ACI) pattern — understand before building
 - [ ] Implement tool-based context: give AI structured tools (`read_file`, `search_codebase`, `list_functions`) instead of dumping files
@@ -762,7 +762,7 @@ This phase requires RoboMesh to be sufficiently developed to support external ro
 
 ### PHASE 10 — Custom Coding Engine
 
-*Goal: replace Aider with your own implementation when needed*
+*Goal: replace Aider with your own implementation when needed*.
 
 This phase only becomes relevant if Aider is deprecated, under-performing, or you want capabilities it doesn't support. Because you built behind `CodingEngine` from day one, this is just writing a new class.
 
@@ -866,7 +866,7 @@ The github repository to test the deployed code on is <https://github.com/shaply
 ## Existing Tools to Study (not build from)
 
 | Tool | What to learn from it |
-|---|---|
+| --- | --- |
 | [Aider](https://aider.chat/) | Your coding engine. Read its Python API docs and `aider/coders/` source |
 | [SWE-agent ACI](https://github.com/SWE-agent/SWE-agent) | How to build tool-based context for Phase 9 |
 | [LangGraph docs](https://langchain-ai.github.io/langgraph/) | State machine patterns — introduced in Phase 3 |

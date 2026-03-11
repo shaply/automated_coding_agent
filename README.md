@@ -104,6 +104,7 @@ With Tailscale: `http://your-mini-pc.tailnet:5173` from anywhere.
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+aider-install         # installs aider-chat — required once after pip install
 uvicorn main:app --reload
 
 # Frontend (separate terminal)

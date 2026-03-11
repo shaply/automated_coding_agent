@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies first (layer caching)
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# aider-install sets up aider-chat in the current Python environment
+RUN aider-install
 
 # Copy backend source
 COPY backend/ .
