@@ -5,6 +5,8 @@
 <nav>
   <a href="/" class:active={$page.url.pathname === '/'}>Dashboard</a>
   <a href="/history" class:active={$page.url.pathname === '/history'}>History</a>
+  <a href="/logs" class:active={$page.url.pathname === '/logs'}>Logs</a>
+  <a href="/stats" class:active={$page.url.pathname === '/stats'}>Statistics</a>
 </nav>
 
 <main>
@@ -49,7 +51,7 @@
   }
 
   main {
-    max-width: 900px;
+    max-width: 1100px;
     margin: 2rem auto;
     padding: 0 1.5rem;
   }

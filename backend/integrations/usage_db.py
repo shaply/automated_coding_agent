@@ -73,5 +73,20 @@ class UsageDB:
         ).fetchall()
         return [{"provider": r[0], "tokens_used": r[1], "date": today} for r in rows]
 
+    def get_historical_usage(self) -> list[dict]:
+        """Return all usage rows across all days, newest first."""
+        rows = self._conn.execute(
+            "SELECT provider, date, tokens_used FROM usage ORDER BY date DESC, provider ASC",
+        ).fetchall()
+        return [{"provider": r[0], "date": r[1], "tokens_used": r[2]} for r in rows]
+
+    def get_totals_by_provider(self) -> list[dict]:
+        """Return total tokens used per provider across all time."""
+        rows = self._conn.execute(
+            "SELECT provider, SUM(tokens_used) AS total, COUNT(*) AS days_active "
+            "FROM usage GROUP BY provider ORDER BY total DESC",
+        ).fetchall()
+        return [{"provider": r[0], "total_tokens": r[1], "days_active": r[2]} for r in rows]
+
     def close(self) -> None:
         self._conn.close()

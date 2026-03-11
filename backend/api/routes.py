@@ -188,7 +188,8 @@ async def list_issues():
     assignee = CONFIG["project"].get("github_assignee", "")
     if not assignee:
         raise HTTPException(status_code=503, detail="github_assignee not set in config.")
-    issues = github_client.get_assigned_issues(assignee)
+    required_label = CONFIG["project"].get("differentiating_label")
+    issues = github_client.get_assigned_issues(assignee, required_label=required_label)
     return {
         "issues": [
             {"number": i.number, "title": i.title, "body": i.body, "url": i.url, "labels": i.labels}
@@ -240,8 +241,9 @@ async def refresh_issues():
     assignee = CONFIG["project"].get("github_assignee", "")
     if not assignee:
         return {"issues": [], "message": "github_assignee not set in config."}
+    required_label = CONFIG["project"].get("differentiating_label")
     issues = await __import__("asyncio").get_event_loop().run_in_executor(
-        None, lambda: github_client.get_assigned_issues(assignee)
+        None, lambda: github_client.get_assigned_issues(assignee, required_label=required_label)
     )
     return {
         "issues": [
@@ -249,6 +251,25 @@ async def refresh_issues():
             for i in issues
         ],
         "message": f"Fetched {len(issues)} issue(s).",
+    }
+
+
+@router.get("/stats")
+async def get_stats():
+    """Return historical token usage stats for the Agent Statistics page."""
+    from main import app_state, CONFIG
+    usage_db = app_state["usage_db"]
+    return {
+        "totals_by_provider": usage_db.get_totals_by_provider(),
+        "daily_history": usage_db.get_historical_usage(),
+        "providers_config": {
+            p: {
+                "daily_token_budget": CONFIG["providers"][p].get("daily_token_budget"),
+                "model": CONFIG["providers"][p].get("model"),
+            }
+            for p in CONFIG["providers"].get("fallback_order", [])
+            if p in CONFIG["providers"]
+        },
     }
 
 

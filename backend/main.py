@@ -397,7 +397,12 @@ async def scheduled_run() -> None:
         logger.info("Scheduler: project.github_assignee not set, skipping.")
         return
 
-    issues = github_client.get_assigned_issues(assignee)
+    required_label = CONFIG["project"].get("differentiating_label")
+    issues = github_client.get_assigned_issues(assignee, required_label=required_label)
+    logger.info(
+        "Scheduler: fetched %d issue(s) for assignee=%s label=%s",
+        len(issues), assignee, required_label or "(none)",
+    )
     if not issues:
         logger.info("Scheduler: no assigned issues found.")
         return

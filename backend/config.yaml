@@ -5,6 +5,7 @@ agent:
 project:
   github_repo: shaply/cf_ai_resumebuilder  # repo to clone per task
   github_assignee: shaply                  # GitHub username for scheduled issue pickup
+  differentiating_label: BOT_ASSIGNED      # bot only works on issues that also carry this label
   base_branch: main                        # base branch for PRs
   run_tests: false                         # target repo has no test suite
   test_command: pytest                     # command to run if run_tests is true

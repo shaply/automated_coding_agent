@@ -122,8 +122,23 @@ class LLMClient:
 
             # Track token usage
             tokens_used = response.usage.total_tokens if response.usage else 0
+            prompt_tokens = response.usage.prompt_tokens if response.usage else 0
+            completion_tokens = response.usage.completion_tokens if response.usage else 0
             self.usage_db.add_usage(provider, tokens_used)
-            logger.debug("Provider %s used %d tokens (today total: %d)", provider, tokens_used, used_today + tokens_used)
+            new_total = used_today + tokens_used
+            budget_pct = (new_total / daily_budget * 100) if daily_budget != float("inf") else 0
+            logger.info(
+                "LLM call: provider=%s model=%s  prompt=%d completion=%d total=%d  "
+                "daily=%d/%d (%.1f%%)",
+                provider, model, prompt_tokens, completion_tokens, tokens_used,
+                new_total, daily_budget, budget_pct,
+            )
+            if budget_pct >= 80:
+                logger.warning(
+                    "Token budget WARNING: %s at %.1f%% daily budget (%d/%d tokens). "
+                    "Consider conserving usage.",
+                    provider, budget_pct, new_total, daily_budget,
+                )
 
             content = response.choices[0].message.content
             return content

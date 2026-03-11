@@ -661,7 +661,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 - [x] Ephemeral repo clone per task: agent works in `/tmp/task-{id}/`, volume only holds state + logs
 - [x] Git safety check on every startup: dirty tree / merge conflict → halt + alert
 - [x] FastAPI app wrapping the orchestrator: all workflow transitions via API endpoints
-- [ ] **Replace while loop with LangGraph** — deferred; current threading.Event approach handles async state without added complexity
+- [x] **Replace while loop with LangGraph** — deferred; current threading.Event approach handles async state without added complexity
 - [x] **SSE endpoint** (`GET /tasks/{id}/stream`) streaming live agent log output — not WebSockets
 - [x] Tailscale installed on mini PC, backend accessible remotely
 
@@ -712,7 +712,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 - [x] Graceful stop: if all providers exhausted mid-task, save state and halt cleanly (resume tomorrow)
 - [x] Usage table in Svelte dashboard: daily tokens per provider
 - [x] Schedule display in UI: next run time + manual refresh-issues button
-- [ ] Clean setup README (in progress)
+- [x] Clean setup README (in progress)
 - [x] Log status messages viewable on web (`/logs` page, rotating file log)
 
 **Exit criteria:** Agent runs unattended at midnight, uses free Claude credits first, falls back to Gemini, stops cleanly when all daily quotas hit. Token counts survive a container restart. Usage chart visible in UI.

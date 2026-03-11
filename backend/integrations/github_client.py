@@ -25,20 +25,35 @@ class GitHubClient:
         self._gh = Github(token)
         self._repo = self._gh.get_repo(repo_name)
 
-    def get_assigned_issues(self, assignee: str) -> list[GitHubIssue]:
-        """Return open issues assigned to the given GitHub username."""
+    def get_assigned_issues(
+        self, assignee: str, required_label: str | None = None
+    ) -> list[GitHubIssue]:
+        """Return open issues assigned to the given GitHub username.
+
+        If *required_label* is set, only issues that carry that label are returned.
+        This lets you differentiate bot-assigned issues from human-assigned ones
+        without needing a separate bot account.
+        """
         issues = self._repo.get_issues(state="open", assignee=assignee)
-        return [
-            GitHubIssue(
+        result = []
+        for issue in issues:
+            if issue.pull_request is not None:
+                continue  # exclude PRs
+            label_names = [label.name for label in issue.labels]
+            if required_label and required_label not in label_names:
+                logger.debug(
+                    "Skipping issue #%d — missing required label '%s'",
+                    issue.number, required_label,
+                )
+                continue
+            result.append(GitHubIssue(
                 number=issue.number,
                 title=issue.title,
                 body=issue.body or "",
                 url=issue.html_url,
-                labels=[label.name for label in issue.labels],
-            )
-            for issue in issues
-            if issue.pull_request is None  # exclude PRs
-        ]
+                labels=label_names,
+            ))
+        return result
 
     def open_pull_request(
         self,

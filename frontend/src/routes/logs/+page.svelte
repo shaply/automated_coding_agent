@@ -2,17 +2,43 @@
   import { onMount } from 'svelte';
   import { getLogs } from '$lib/api';
 
-  let lines: string[] = [];
+  type Level = 'ALL' | 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
+
+  interface ParsedLine {
+    raw: string;
+    level: Level;
+  }
+
+  let allLines: ParsedLine[] = [];
   let loading = true;
   let error = '';
-  let lineCount = 200;
+  let lineCount = 500;
+  let activeLevel: Level = 'ALL';
+
+  const LEVELS: Level[] = ['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR'];
+
+  function parseLevel(line: string): Level {
+    if (/\bERROR\b/.test(line))   return 'ERROR';
+    if (/\bWARNING\b/.test(line)) return 'WARNING';
+    if (/\bINFO\b/.test(line))    return 'INFO';
+    if (/\bDEBUG\b/.test(line))   return 'DEBUG';
+    return 'INFO';
+  }
+
+  function levelClass(level: Level): string {
+    return `line-${level.toLowerCase()}`;
+  }
+
+  $: filteredLines = activeLevel === 'ALL'
+    ? allLines
+    : allLines.filter(l => l.level === activeLevel);
 
   async function load() {
     loading = true;
     error = '';
     try {
       const res = await getLogs(lineCount);
-      lines = res.lines;
+      allLines = res.lines.map(raw => ({ raw, level: parseLevel(raw) }));
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -36,16 +62,35 @@
   </div>
 </div>
 
+<div class="level-filters">
+  {#each LEVELS as lvl}
+    <button
+      class="filter-btn filter-{lvl.toLowerCase()}"
+      class:active={activeLevel === lvl}
+      on:click={() => activeLevel = lvl}
+    >
+      {lvl}
+      {#if lvl !== 'ALL'}
+        <span class="count">{allLines.filter(l => l.level === lvl).length}</span>
+      {/if}
+    </button>
+  {/each}
+</div>
+
 {#if error}
   <p class="error">{error}</p>
 {/if}
 
 {#if loading}
   <p class="muted">Loading…</p>
-{:else if lines.length === 0}
-  <p class="muted">No log entries yet.</p>
+{:else if filteredLines.length === 0}
+  <p class="muted">No log entries{activeLevel !== 'ALL' ? ` at level ${activeLevel}` : ''} yet.</p>
 {:else}
-  <pre class="log-output">{lines.join('\n')}</pre>
+  <div class="log-output">
+    {#each filteredLines as line}
+      <div class="log-line {levelClass(line.level)}">{line.raw}</div>
+    {/each}
+  </div>
 {/if}
 
 <style>
@@ -53,7 +98,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
   h1 { font-size: 1.5rem; }
   .controls { display: flex; gap: 0.75rem; align-items: center; }
@@ -76,19 +121,71 @@
   }
   button:hover:not(:disabled) { background: #30363d; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Level filter buttons */
+  .level-filters {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 20px;
+    opacity: 0.55;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .filter-btn.active { opacity: 1; }
+  .filter-btn:hover { opacity: 0.9; }
+
+  .filter-all        { border-color: #30363d; }
+  .filter-debug      { border-color: #444c56; color: #8b949e; }
+  .filter-info       { border-color: #1f6feb; color: #58a6ff; }
+  .filter-warning    { border-color: #9e6a03; color: #d29922; }
+  .filter-error      { border-color: #b62324; color: #f85149; }
+
+  .filter-all.active     { background: #21262d; }
+  .filter-debug.active   { background: #21262d; }
+  .filter-info.active    { background: #1f6feb22; }
+  .filter-warning.active { background: #9e6a0322; }
+  .filter-error.active   { background: #b6232422; }
+
+  .count {
+    background: #30363d;
+    border-radius: 10px;
+    padding: 0 0.4em;
+    font-size: 0.75rem;
+  }
+
+  /* Log output area */
   .log-output {
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 8px;
-    padding: 1rem;
+    padding: 0.75rem 1rem;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
     font-size: 0.78rem;
-    color: #8b949e;
     overflow-x: auto;
+    overflow-y: auto;
+    height: calc(100vh - 230px);
+    min-height: 400px;
+  }
+  .log-line {
     white-space: pre-wrap;
     word-break: break-all;
-    max-height: 80vh;
-    overflow-y: auto;
+    line-height: 1.55;
+    padding: 0.05rem 0;
   }
+  .line-debug   { color: #6e7681; }
+  .line-info    { color: #8b949e; }
+  .line-warning { color: #d29922; }
+  .line-error   { color: #f85149; }
+
   .muted { color: #8b949e; }
   .error { color: #f85149; }
 </style>

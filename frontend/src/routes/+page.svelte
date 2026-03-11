@@ -95,124 +95,157 @@
 
 <h1>AutoDev</h1>
 
-<section class="status-card">
-  <div class="status-row">
-    <span class="label">Agent status</span>
-    <span class="badge {statusClass(status)}">{status}</span>
-  </div>
-  {#if taskId}
-    <div class="status-row">
-      <span class="label">Current task</span>
-      <a href="/plan/{taskId}">{taskId}</a>
-    </div>
-  {/if}
-  {#if schedule}
-    <div class="status-row">
-      <span class="label">Next scheduled run</span>
-      <span class="schedule-time">
-        {#if schedule.next_run}
-          {new Date(schedule.next_run).toLocaleString()} ({schedule.timezone})
-        {:else if schedule.enabled}
-          Scheduler starting…
+<div class="dashboard-grid">
+  <!-- ── LEFT: main control column ── -->
+  <div class="col-main">
+
+    <section class="status-card">
+      <div class="status-row">
+        <span class="label">Agent status</span>
+        <span class="badge {statusClass(status)}">{status}</span>
+      </div>
+      {#if taskId}
+        <div class="status-row">
+          <span class="label">Current task</span>
+          <a href="/plan/{taskId}">{taskId}</a>
+        </div>
+      {/if}
+      {#if schedule}
+        <div class="status-row">
+          <span class="label">Next scheduled run</span>
+          <span class="schedule-time">
+            {#if schedule.next_run}
+              {new Date(schedule.next_run).toLocaleString()} ({schedule.timezone})
+            {:else if schedule.enabled}
+              Scheduler starting…
+            {:else}
+              Scheduler disabled
+            {/if}
+          </span>
+        </div>
+      {/if}
+      <div class="status-row card-links">
+        <a href="/logs" class="text-link">View agent logs →</a>
+        <a href="/stats" class="text-link">Agent statistics →</a>
+      </div>
+    </section>
+
+    {#if status === 'idle' || status === 'done'}
+      <section class="new-task">
+        <h2>New Task</h2>
+        <textarea
+          bind:value={newTask}
+          placeholder="Describe what you want AutoDev to build or fix…"
+          rows="4"
+        ></textarea>
+        <button on:click={() => submitTask()} disabled={submitting || !newTask.trim()}>
+          {submitting ? 'Submitting…' : 'Start Task'}
+        </button>
+      </section>
+    {:else if status === 'awaiting_plan_review'}
+      <section class="action-prompt">
+        <a href="/plan/{taskId}" class="btn">Review Plan →</a>
+      </section>
+    {:else if status === 'coding' || status === 'awaiting_step_review'}
+      <section class="action-prompt">
+        <a href="/log/{taskId}" class="btn">Watch Live Log →</a>
+      </section>
+    {:else if status === 'awaiting_diff_review'}
+      <section class="action-prompt">
+        <a href="/diff/{taskId}" class="btn">Review Diff →</a>
+      </section>
+    {:else if status.startsWith('halted')}
+      <section class="halted-alert">
+        <strong>Agent halted.</strong>
+        {#if status === 'halted:credits_exhausted'}
+          <p>Daily credits exhausted. You can review the partial diff or wait until tomorrow.</p>
+          <div class="halted-actions">
+            <a href="/diff/{taskId}" class="btn btn-secondary">Review Partial Diff</a>
+          </div>
         {:else}
-          Scheduler disabled
+          <p>Check the task detail for the halt reason.</p>
+          <a href="/plan/{taskId}" class="btn btn-secondary">View Task →</a>
         {/if}
-      </span>
-    </div>
-  {/if}
-  <div class="status-row card-links">
-    <a href="/logs" class="text-link">View agent logs →</a>
+      </section>
+    {/if}
+
+    {#if error}
+      <p class="error">{error}</p>
+    {/if}
+
+    {#if usage.length > 0}
+      <section class="usage">
+        <h2>Today's Token Usage</h2>
+        <table>
+          <thead><tr><th>Provider</th><th>Tokens Used</th></tr></thead>
+          <tbody>
+            {#each usage as row}
+              <tr>
+                <td>{row.provider}</td>
+                <td>{row.tokens_used.toLocaleString()}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </section>
+    {/if}
+
   </div>
-</section>
 
-{#if status === 'idle' || status === 'done'}
-  <section class="new-task">
-    <h2>New Task</h2>
-    <textarea
-      bind:value={newTask}
-      placeholder="Describe what you want AutoDev to build or fix…"
-      rows="4"
-    ></textarea>
-    <button on:click={() => submitTask()} disabled={submitting || !newTask.trim()}>
-      {submitting ? 'Submitting…' : 'Start Task'}
-    </button>
-  </section>
-
-  {#if issues.length > 0 || refreshing}
-    <section class="issues">
-      <div class="issues-header">
-        <h2>Open GitHub Issues</h2>
+  <!-- ── RIGHT: task queue column ── -->
+  <div class="col-queue">
+    <section class="queue-card">
+      <div class="queue-header">
+        <h2>Task Queue</h2>
         <button class="btn btn-sm btn-secondary" on:click={doRefreshIssues} disabled={refreshing || submitting}>
-          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          {refreshing ? '…' : '↻'}
         </button>
       </div>
-      {#each issues as issue}
-        <div class="issue-row">
-          <div class="issue-meta">
-            <span class="issue-number">#{issue.number}</span>
-            <span class="issue-title">{issue.title}</span>
-            {#each issue.labels as label}
-              <span class="issue-label">{label}</span>
-            {/each}
-          </div>
-          <button class="btn btn-sm" on:click={() => startFromIssue(issue)} disabled={submitting}>
-            Start
-          </button>
-        </div>
-      {/each}
+      <p class="queue-sub">Issues the agent will tackle in order</p>
+
+      {#if issues.length === 0}
+        <p class="muted queue-empty">
+          {refreshing ? 'Fetching issues…' : 'No queued issues.'}
+        </p>
+      {:else}
+        <ol class="queue-list">
+          {#each issues as issue, i}
+            <li class="queue-item" class:queue-item-active={i === 0 && (status === 'idle' || status === 'done')}>
+              <div class="queue-item-top">
+                <span class="queue-pos">#{i + 1}</span>
+                <span class="queue-issue-number">GH-{issue.number}</span>
+                {#each issue.labels as label}
+                  <span class="issue-label">{label}</span>
+                {/each}
+              </div>
+              <div class="queue-item-title">{issue.title}</div>
+              {#if i === 0 && (status === 'idle' || status === 'done')}
+                <button class="btn btn-sm queue-start-btn" on:click={() => startFromIssue(issue)} disabled={submitting}>
+                  {submitting ? 'Starting…' : '▶ Start now'}
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      {/if}
     </section>
-  {/if}
-{:else if status === 'awaiting_plan_review'}
-  <section class="action-prompt">
-    <a href="/plan/{taskId}" class="btn">Review Plan →</a>
-  </section>
-{:else if status === 'coding' || status === 'awaiting_step_review'}
-  <section class="action-prompt">
-    <a href="/log/{taskId}" class="btn">Watch Live Log →</a>
-  </section>
-{:else if status === 'awaiting_diff_review'}
-  <section class="action-prompt">
-    <a href="/diff/{taskId}" class="btn">Review Diff →</a>
-  </section>
-{:else if status.startsWith('halted')}
-  <section class="halted-alert">
-    <strong>Agent halted.</strong>
-    {#if status === 'halted:credits_exhausted'}
-      <p>Daily credits exhausted. You can review the partial diff or wait until tomorrow.</p>
-      <div class="halted-actions">
-        <a href="/diff/{taskId}" class="btn btn-secondary">Review Partial Diff</a>
-      </div>
-    {:else}
-      <p>Check the task detail for the halt reason.</p>
-      <a href="/plan/{taskId}" class="btn btn-secondary">View Task →</a>
-    {/if}
-  </section>
-{/if}
-
-{#if error}
-  <p class="error">{error}</p>
-{/if}
-
-{#if usage.length > 0}
-  <section class="usage">
-    <h2>Today's Token Usage</h2>
-    <table>
-      <thead><tr><th>Provider</th><th>Tokens Used</th></tr></thead>
-      <tbody>
-        {#each usage as row}
-          <tr>
-            <td>{row.provider}</td>
-            <td>{row.tokens_used.toLocaleString()}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </section>
-{/if}
+  </div>
+</div>
 
 <style>
   h1 { font-size: 1.8rem; margin-bottom: 1.5rem; }
   h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #8b949e; }
+
+  /* Two-column dashboard layout */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 750px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
 
   .status-card {
     background: #161b22;
@@ -226,8 +259,9 @@
     gap: 1rem;
     align-items: center;
     padding: 0.25rem 0;
+    flex-wrap: wrap;
   }
-  .label { color: #8b949e; font-size: 0.9rem; min-width: 120px; }
+  .label { color: #8b949e; font-size: 0.9rem; min-width: 130px; }
 
   .badge {
     padding: 0.2em 0.65em;
@@ -239,9 +273,7 @@
   .status-active  { background: #1f6feb33; color: #58a6ff; }
   .status-halted  { background: #da3633; color: #fff; }
 
-  .new-task {
-    margin-bottom: 1.5rem;
-  }
+  .new-task { margin-bottom: 1.5rem; }
   textarea {
     width: 100%;
     background: #161b22;
@@ -262,12 +294,15 @@
     padding: 0.5rem 1.25rem;
     font-size: 0.95rem;
     font-weight: 600;
+    cursor: pointer;
     transition: background 0.15s;
+    text-decoration: none;
   }
   button:hover:not(:disabled), .btn:hover { background: #2ea043; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-secondary { background: #21262d; border: 1px solid #30363d; }
+  .btn-secondary { background: #21262d; border: 1px solid #30363d; color: #e6edf3; }
   .btn-secondary:hover { background: #30363d; }
+  .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; }
 
   .action-prompt, .halted-alert { margin-bottom: 1.5rem; }
   .halted-alert {
@@ -279,35 +314,22 @@
   .halted-actions { margin-top: 0.75rem; display: flex; gap: 0.75rem; }
 
   .error { color: #f85149; font-size: 0.9rem; }
+  .muted { color: #8b949e; font-size: 0.85rem; }
 
   .schedule-time { color: #e6edf3; font-size: 0.9rem; }
-  .card-links { margin-top: 0.25rem; }
-  .text-link { color: #58a6ff; font-size: 0.85rem; text-decoration: none; }
+  .card-links { margin-top: 0.25rem; gap: 1.25rem; }
+  .text-link { color: #58a6ff; font-size: 0.85rem; }
   .text-link:hover { text-decoration: underline; }
 
-  .issues { margin-bottom: 1.5rem; }
-  .issues-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
-  .issues-header h2 { margin-bottom: 0; }
-  .issue-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #21262d;
-    gap: 1rem;
-  }
-  .issue-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; flex: 1; min-width: 0; }
-  .issue-number { color: #8b949e; font-size: 0.85rem; white-space: nowrap; }
-  .issue-title { color: #e6edf3; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .issue-label {
     background: #1f6feb33;
     color: #58a6ff;
     border-radius: 12px;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     padding: 0.1em 0.5em;
   }
-  .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; }
 
+  /* Usage table */
   .usage table {
     width: 100%;
     border-collapse: collapse;
@@ -319,4 +341,73 @@
     border-bottom: 1px solid #21262d;
   }
   .usage th { color: #8b949e; }
+
+  /* Task queue card */
+  .queue-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    position: sticky;
+    top: 1rem;
+  }
+  .queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.1rem;
+  }
+  .queue-header h2 { margin-bottom: 0; }
+  .queue-sub {
+    color: #6e7681;
+    font-size: 0.78rem;
+    margin: 0 0 0.9rem 0;
+  }
+  .queue-empty { margin: 0; }
+
+  .queue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .queue-item {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+  }
+  .queue-item-active {
+    border-color: #1f6feb;
+    background: #1f6feb0d;
+  }
+  .queue-item-top {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .queue-pos {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #8b949e;
+  }
+  .queue-issue-number {
+    font-size: 0.75rem;
+    color: #58a6ff;
+  }
+  .queue-item-title {
+    font-size: 0.85rem;
+    color: #e6edf3;
+    line-height: 1.3;
+    word-break: break-word;
+    margin-bottom: 0.4rem;
+  }
+  .queue-start-btn {
+    padding: 0.25rem 0.65rem;
+    font-size: 0.8rem;
+  }
 </style>

@@ -119,6 +119,28 @@ export const getStatus = () =>
 export const getUsage = () =>
   request<{ usage: UsageEntry[] }>('/usage');
 
+// --- Stats ---
+
+export interface ProviderTotal {
+  provider: string;
+  total_tokens: number;
+  days_active: number;
+}
+
+export interface DailyUsage {
+  provider: string;
+  date: string;
+  tokens_used: number;
+}
+
+export interface StatsResponse {
+  totals_by_provider: ProviderTotal[];
+  daily_history: DailyUsage[];
+  providers_config: Record<string, { daily_token_budget: number; model: string }>;
+}
+
+export const getStats = () => request<StatsResponse>('/stats');
+
 // --- Logs ---
 
 export const getLogs = (lines = 200) =>
