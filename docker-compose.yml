@@ -20,7 +20,8 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://backend:8000
+      - PLACEHOLDER_ENV_VAR=example-value
+      # - VITE_API_URL=http://backend:8000
       # VITE_API_TOKEN must match AUTODEV_API_TOKEN — set via .env or override here
     env_file:
       - frontend/.env

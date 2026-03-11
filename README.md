@@ -14,7 +14,7 @@ AutoDev is a scheduled program that uses your free daily AI credits to make incr
 
 ## Architecture
 
-```
+```text
 AutoDev (Python + FastAPI + Svelte)
 ├── backend/          Python + FastAPI orchestrator
 │   ├── api/          REST endpoints + SSE streaming
@@ -29,7 +29,7 @@ AutoDev (Python + FastAPI + Svelte)
 
 AutoDev runs on a mini PC as a persistent Docker container, accessible remotely via Tailscale.
 
-```
+```text
 Mini PC (always on)
 ├── Docker: autodev-backend  (Python + FastAPI, port 8000)
 └── Docker: autodev-frontend (Svelte, port 5173)
@@ -45,6 +45,8 @@ cd autodev
 ```
 
 ### 2. Set up environment variables
+
+Set up backend environment variables.
 
 ```bash
 cp backend/.env.example backend/.env
@@ -73,6 +75,20 @@ project:
   github_assignee: your-bot-github-username  # only this user's issues are auto-picked
   base_branch: main
   run_tests: false     # set true if the repo has a test suite
+```
+
+Set up frontend environment variables.
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+Open `frontend/.env` and fill in:
+
+```ini
+# Required
+VITE_API_URL=http://localhost:8000    # If pulling up website on another computer, then you need to set this address to the address of your mini PC
+VITE_API_TOKEN=change-me-to-match-AUTODEV_API_TOKEN   # Should be same as AUTODEV_API_TOKEN in backend/.env
 ```
 
 ### 3. GitHub bot account (optional but recommended)
@@ -116,7 +132,7 @@ npm run dev
 ## Tech Stack
 
 | Component | Tool |
-|---|---|
+| --- | --- |
 | Agent language | Python 3.11+ |
 | LLM routing | LiteLLM (Claude → Gemini → Groq fallback) |
 | Coding engine | Aider (via Python API) |
