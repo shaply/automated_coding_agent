@@ -9,9 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies first (layer caching)
 COPY backend/requirements.txt .
+# aider-install (the meta-package) creates its own venv, which doesn't work in Docker.
+# Instead we install aider-chat directly — the underlying package aider-install would fetch.
+# For LOCAL dev outside Docker: pip install aider-install && aider-install
+RUN pip install --no-cache-dir aider-chat
 RUN pip install --no-cache-dir -r requirements.txt
-# aider-install sets up aider-chat in the current Python environment
-RUN aider-install
 
 # Copy backend source
 COPY backend/ .
