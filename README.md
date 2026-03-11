@@ -44,37 +44,73 @@ git clone https://github.com/your-username/autodev.git
 cd autodev
 ```
 
-### 2. Configure
+### 2. Set up environment variables
 
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env with your API keys and secrets
 ```
 
-Edit `backend/config.yaml` to set your target GitHub repo, schedule, and provider preferences.
+Open `backend/.env` and fill in:
 
-### 3. Run locally (development)
+```ini
+# Required
+AUTODEV_API_TOKEN=your-random-secret     # UI password — generate with: openssl rand -hex 32
+ANTHROPIC_API_KEY=sk-ant-...             # Claude API key
 
-```bash
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
+# Optional (GitHub integration)
+GITHUB_TOKEN=ghp_...                     # Personal access token for the bot account (see below)
 
-# Frontend (in another terminal)
-cd frontend
-npm install
-npm run dev
+# Optional (additional LLM providers)
+# GEMINI_API_KEY=...
+# GROQ_API_KEY=...
 ```
 
-### 4. Run in Docker (production)
+Edit `backend/config.yaml` to set your target GitHub repo, schedule, and provider preferences:
+
+```yaml
+project:
+  github_repo: your-username/your-repo
+  github_assignee: your-bot-github-username  # only this user's issues are auto-picked
+  base_branch: main
+  run_tests: false     # set true if the repo has a test suite
+```
+
+### 3. GitHub bot account (optional but recommended)
+
+To avoid the agent working on issues you're already handling:
+
+1. Create a **separate GitHub account** for the bot (e.g., `myproject-bot`)
+2. No 2FA is needed — generate a **Personal Access Token** instead:
+   - GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+   - Scopes: `Contents: Read & Write`, `Pull requests: Read & Write`, `Issues: Read`
+3. Set `GITHUB_TOKEN` in `backend/.env` to that token
+4. Set `github_assignee` in `config.yaml` to the bot's GitHub username
+5. Assign issues to the bot account when you want AutoDev to work on them — unassign to claim them yourself
+
+### 4. Run in Docker (recommended)
 
 ```bash
 docker compose up -d
 ```
 
-Access the UI at `http://localhost:5173` or `http://your-mini-pc.tailnet:5173` via Tailscale.
+Access the UI at `http://localhost:5173`.
+
+With Tailscale: `http://your-mini-pc.tailnet:5173` from anywhere.
+
+### 5. Run locally (development)
+
+```bash
+# Backend
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
+```
 
 ## Tech Stack
 
@@ -94,12 +130,12 @@ Access the UI at `http://localhost:5173` or `http://your-mini-pc.tailnet:5173` v
 ## Implementation Phases
 
 - [x] **Phase 1** — Foundation: CLI loop, Aider engine, LiteLLM routing, session state
-- [ ] **Phase 2** — Planning loop + per-step test execution
-- [ ] **Phase 3** — Docker + FastAPI backend + LangGraph
-- [ ] **Phase 4** — Svelte frontend review UI
-- [ ] **Phase 5** — GitHub integration (issues → PRs)
-- [ ] **Phase 6** — Scheduler + multi-provider credit routing
-- [ ] **Phase 7** — Implementation controls (mid-task comment injection)
+- [x] **Phase 2** — Planning loop + per-step test execution + self-correction
+- [x] **Phase 3** — Docker + FastAPI backend + ephemeral clones + git safety
+- [x] **Phase 4** — Svelte frontend review UI
+- [x] **Phase 5** — GitHub integration (issues → PRs)
+- [x] **Phase 6** — Scheduler + multi-provider credit routing + log viewer
+- [ ] **Phase 7** — Implementation controls (step-by-step mode, AI self-review)
 - [ ] **Phase 8** — RoboMesh integration
 - [ ] **Phase 9** — Context intelligence upgrade
 - [ ] **Phase 10** — Custom coding engine

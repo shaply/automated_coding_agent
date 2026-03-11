@@ -1,14 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getStatus, getUsage, createTask, listIssues, type UsageEntry, type GitHubIssue } from '$lib/api';
+  import {
+    getStatus, getUsage, createTask, listIssues, refreshIssues, getSchedule,
+    type UsageEntry, type GitHubIssue, type ScheduleInfo
+  } from '$lib/api';
 
   let status = 'loading…';
   let taskId = '';
   let usage: UsageEntry[] = [];
   let issues: GitHubIssue[] = [];
+  let schedule: ScheduleInfo | null = null;
   let newTask = '';
   let error = '';
   let submitting = false;
+  let refreshing = false;
 
   async function refresh() {
     try {
@@ -22,12 +27,33 @@
     }
   }
 
+  async function loadSchedule() {
+    try {
+      schedule = await getSchedule();
+    } catch {
+      // ignore if not available
+    }
+  }
+
   async function loadIssues() {
     try {
       const res = await listIssues();
       issues = res.issues;
     } catch {
       // GitHub not configured — silently ignore
+    }
+  }
+
+  async function doRefreshIssues() {
+    refreshing = true;
+    error = '';
+    try {
+      const res = await refreshIssues();
+      issues = res.issues;
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      refreshing = false;
     }
   }
 
@@ -55,6 +81,7 @@
   onMount(() => {
     refresh();
     loadIssues();
+    loadSchedule();
     const interval = setInterval(refresh, 5000);
     return () => clearInterval(interval);
   });
@@ -79,6 +106,23 @@
       <a href="/plan/{taskId}">{taskId}</a>
     </div>
   {/if}
+  {#if schedule}
+    <div class="status-row">
+      <span class="label">Next scheduled run</span>
+      <span class="schedule-time">
+        {#if schedule.next_run}
+          {new Date(schedule.next_run).toLocaleString()} ({schedule.timezone})
+        {:else if schedule.enabled}
+          Scheduler starting…
+        {:else}
+          Scheduler disabled
+        {/if}
+      </span>
+    </div>
+  {/if}
+  <div class="status-row card-links">
+    <a href="/logs" class="text-link">View agent logs →</a>
+  </div>
 </section>
 
 {#if status === 'idle' || status === 'done'}
@@ -94,9 +138,14 @@
     </button>
   </section>
 
-  {#if issues.length > 0}
+  {#if issues.length > 0 || refreshing}
     <section class="issues">
-      <h2>Open GitHub Issues</h2>
+      <div class="issues-header">
+        <h2>Open GitHub Issues</h2>
+        <button class="btn btn-sm btn-secondary" on:click={doRefreshIssues} disabled={refreshing || submitting}>
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+        </button>
+      </div>
       {#each issues as issue}
         <div class="issue-row">
           <div class="issue-meta">
@@ -231,7 +280,14 @@
 
   .error { color: #f85149; font-size: 0.9rem; }
 
+  .schedule-time { color: #e6edf3; font-size: 0.9rem; }
+  .card-links { margin-top: 0.25rem; }
+  .text-link { color: #58a6ff; font-size: 0.85rem; text-decoration: none; }
+  .text-link:hover { text-decoration: underline; }
+
   .issues { margin-bottom: 1.5rem; }
+  .issues-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+  .issues-header h2 { margin-bottom: 0; }
   .issue-row {
     display: flex;
     justify-content: space-between;

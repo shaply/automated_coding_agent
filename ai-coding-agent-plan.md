@@ -1,4 +1,5 @@
 # AutoDev — Refined Project Plan
+
 *An automated, human-in-the-loop AI coding agent*
 
 ---
@@ -31,7 +32,7 @@ AutoDev (Python + FastAPI + Svelte)
 
 The key design principle: build AutoDev's API surface as if RoboMesh will be its client someday, not just your browser. That makes the future integration essentially free — RoboMesh just starts calling the endpoints instead of you doing it through a browser.
 
-RoboMesh can be found here: https://github.com/shaply/Robomesh.
+RoboMesh can be found here: <https://github.com/shaply/Robomesh>.
 
 ---
 
@@ -394,6 +395,7 @@ Your laptop / phone
 ```
 
 **docker-compose.yml** (sketch):
+
 ```yaml
 services:
   backend:
@@ -430,6 +432,7 @@ Token usage must survive container restarts and reset correctly at midnight in t
 ```
 
 Key rules:
+
 - Always derive "today" from the configured timezone in `config.yaml`, not UTC
 - On agent startup, read today's usage from SQLite before routing any requests
 - After every LiteLLM call, immediately write the updated count back to SQLite
@@ -463,6 +466,7 @@ On HALT:
 The agent is single-threaded by design — it runs one task at a time. This creates two conflict scenarios that need explicit defined behavior:
 
 **Scheduler fires while a task is in progress:**
+
 ```
 If agent state is anything other than "idle" at scheduled run time:
   → Skip this scheduled run entirely
@@ -471,6 +475,7 @@ If agent state is anything other than "idle" at scheduled run time:
 ```
 
 **Manual task created via POST /tasks while agent is busy:**
+
 ```
 If agent state is not "idle":
   → Return HTTP 409 Conflict
@@ -530,7 +535,7 @@ Free tiers impose several distinct types of limits, all of which need to be hand
 ### Free Tier Reference (as of 2025 — verify before building)
 
 | Provider | RPM | TPM | Daily limit | Context window |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Claude (Anthropic free) | 5 | 25,000 | 25,000 tokens | 200k |
 | Gemini 1.5 Flash (free) | 15 | 1,000,000 | 1,500 requests | 1M |
 | Groq (Llama 3.1 70B free) | 30 | 6,000 | ~100k tokens | 128k |
@@ -558,6 +563,7 @@ def call_with_backoff(fn, max_retries=5):
 ```
 
 Key rules:
+
 - On a 429: wait and retry with the current provider first (up to `max_retries`)
 - If retries are exhausted: treat it the same as a daily budget exhaustion → trigger fallback to next provider
 - Respect `Retry-After` headers if the provider sends them — use that value instead of the backoff calculation
@@ -582,7 +588,7 @@ This is proactive throttling — the agent paces itself rather than firing reque
 
 Context window exceeded is a hard failure — no retry will fix it. The response is to truncate or summarize the input:
 
-```
+```text
 On context window error:
   1. Log which file/prompt caused the overflow
   2. Attempt to truncate: send only the diff, not full file contents
@@ -612,7 +618,8 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ---
 
 ### PHASE 1 — Foundation
-*Goal: the bare minimum working loop, local CLI only, simple while loop*
+
+*Goal: the bare minimum working loop, local CLI only, simple while loop*.
 
 - [x] Python project setup, `config.yaml` schema (including RPM limits per provider)
 - [x] LiteLLM client wrapper with basic Claude + Gemini support
@@ -629,6 +636,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ---
 
 ### PHASE 2 — Planning Loop + Early Test Execution
+
 *Goal: the AI plans before it codes, tests run automatically after every step*
 
 - [x] `planner.py`: generate a structured plan (numbered steps, files to touch, risks)
@@ -644,15 +652,16 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ---
 
 ### PHASE 3 — Docker + FastAPI Backend + LangGraph
+
 *Goal: move off CLI, get the agent running as a proper service; introduce LangGraph now that async state management is needed*
 
 - [x] **Bearer token auth middleware** (`auth.py`): every endpoint requires `Authorization: Bearer <token>`, returns 401 otherwise
 - [x] **Concurrency enforcement**: `POST /tasks` returns 409 if agent is not idle; scheduler skips if agent is busy
 - [x] Dockerfile for the backend, `docker-compose.yml` for the full stack
-- [ ] Ephemeral repo clone per task: agent works in `/tmp/task-{id}/`, volume only holds state + logs
-- [ ] Git safety check on every startup: dirty tree / merge conflict → halt + alert
+- [x] Ephemeral repo clone per task: agent works in `/tmp/task-{id}/`, volume only holds state + logs
+- [x] Git safety check on every startup: dirty tree / merge conflict → halt + alert
 - [x] FastAPI app wrapping the orchestrator: all workflow transitions via API endpoints
-- [ ] **Replace while loop with LangGraph** — now that FastAPI needs to manage long-running async state across HTTP requests, LangGraph earns its place
+- [ ] **Replace while loop with LangGraph** — deferred; current threading.Event approach handles async state without added complexity
 - [x] **SSE endpoint** (`GET /tasks/{id}/stream`) streaming live agent log output — not WebSockets
 - [x] Tailscale installed on mini PC, backend accessible remotely
 
@@ -661,50 +670,57 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ---
 
 ### PHASE 4 — Svelte Frontend
+
 *Goal: browser-based review UI replacing the CLI*
 
-- [ ] Svelte + TypeScript project setup, typed API client (`api.ts`)
-- [ ] Dashboard page: current task status, agent state (including `halted`), token usage
-- [ ] **Partial work UI**: when state is `halted:credits_exhausted`, show options — review partial diff, resume tomorrow, or discard
-- [ ] **Self-correction failure UI**: when step hits `max_self_correction_attempts`, surface the failure with options to inject a new approach, skip the step, or abort
-- [ ] Plan review page: formatted plan, comment box, approve/reject buttons
-- [ ] Live log page: `LogStream.svelte` consuming SSE stream, real-time output
-- [ ] Diff viewer page: `DiffViewer.svelte` with syntax highlighting, approve/reject
-- [ ] Task history page: past tasks, their plans, per-step test results, outcomes
-- [ ] Halt alert: prominent UI state when agent is blocked on git conflict
+- [x] Svelte + TypeScript project setup, typed API client (`api.ts`)
+- [x] Dashboard page: current task status, agent state (including `halted`), token usage
+- [x] **Partial work UI**: when state is `halted:credits_exhausted`, show options — review partial diff, resume tomorrow, or discard
+- [x] **Self-correction failure UI**: when step hits `max_self_correction_attempts`, surface the failure with options to inject a new approach, skip the step, or abort
+- [x] Plan review page: formatted plan, comment box, approve/reject buttons
+- [x] Live log page: `LogStream.svelte` consuming SSE stream, real-time output
+- [x] Diff viewer page: `DiffViewer.svelte` with syntax highlighting, approve/reject
+- [x] Task history page: past tasks, their plans, per-step test results, outcomes
+- [x] Halt alert: prominent UI state when agent is blocked on git conflict
 
 **Exit criteria:** Full plan → review → approve → watch implementation → final diff → approve, all from the browser. CLI no longer needed.
 
 ---
 
 ### PHASE 5 — GitHub Integration
+
 *Goal: connect to a real project with issues and PRs*
 
-- [ ] `github_client.py`: authenticate, list issues assigned to you, fetch issue body + comments
-- [ ] Issue-as-task: surface assigned issues in the UI as selectable task options
-- [ ] Commit changes to a new branch named after the task (`feature/issue-42-...`)
-- [ ] Open a PR with auto-generated description summarizing what was done and which files changed
-- [ ] Support both local-only mode (no GitHub) and remote mode (config toggle)
+- [x] `github_client.py`: authenticate, list issues assigned to you, fetch issue body + comments
+- [x] Issue-as-task: surface assigned issues in the UI as selectable task options
+- [x] Commit changes to a new branch named after the task (`autodev/issue-42-...`)
+- [x] Open a PR with auto-generated description summarizing what was done and which files changed
+- [x] Support both local-only mode (no GitHub) and remote mode (GITHUB_TOKEN env toggle)
 
 **Exit criteria:** Agent reads a GitHub issue, codes a fix, opens a PR. You merge it on GitHub.
 
 ---
 
 ### PHASE 6 — Scheduler + Multi-Provider Credit Routing
+
 *Goal: runs automatically every day, burns the right provider's free credits, survives restarts*
 
-- [ ] APScheduler integration: run at configured time daily (or on demand via API)
-- [ ] `usage_db.py`: SQLite token budget tracking — survives restarts, resets by calendar date in configured timezone
-- [ ] Provider quota config: specify daily token budgets per provider
-- [ ] Fallback chain: if Claude quota hit → switch to Gemini → switch to Groq
-- [ ] Graceful stop: if all providers exhausted mid-task, save state and halt cleanly (resume tomorrow)
-- [ ] Usage chart in Svelte dashboard: daily tokens per provider
+- [x] APScheduler integration: run at configured time daily (or on demand via API)
+- [x] `usage_db.py`: SQLite token budget tracking — survives restarts, resets by calendar date in configured timezone
+- [x] Provider quota config: specify daily token budgets per provider
+- [x] Fallback chain: if Claude quota hit → switch to Gemini → switch to Groq
+- [x] Graceful stop: if all providers exhausted mid-task, save state and halt cleanly (resume tomorrow)
+- [x] Usage table in Svelte dashboard: daily tokens per provider
+- [x] Schedule display in UI: next run time + manual refresh-issues button
+- [ ] Clean setup README (in progress)
+- [x] Log status messages viewable on web (`/logs` page, rotating file log)
 
 **Exit criteria:** Agent runs unattended at midnight, uses free Claude credits first, falls back to Gemini, stops cleanly when all daily quotas hit. Token counts survive a container restart. Usage chart visible in UI.
 
 ---
 
 ### PHASE 7 — Implementation Controls
+
 *Goal: more granular mid-task control*
 
 - [ ] Mid-implementation comment injection via UI (calls `engine.inject_comment()`)
@@ -716,6 +732,7 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ---
 
 ### PHASE 8 — RoboMesh Integration
+
 *Goal: AutoDev becomes a robot managed by RoboMesh*
 
 This phase requires RoboMesh to be sufficiently developed to support external robot clients with a defined protocol.
@@ -731,6 +748,7 @@ This phase requires RoboMesh to be sufficiently developed to support external ro
 ---
 
 ### PHASE 9 — Context Intelligence Upgrade
+
 *Goal: handle large codebases without hitting token limits*
 
 - [ ] Study SWE-agent's Agent-Computer Interface (ACI) pattern — understand before building
@@ -743,6 +761,7 @@ This phase requires RoboMesh to be sufficiently developed to support external ro
 ---
 
 ### PHASE 10 — Custom Coding Engine
+
 *Goal: replace Aider with your own implementation when needed*
 
 This phase only becomes relevant if Aider is deprecated, under-performing, or you want capabilities it doesn't support. Because you built behind `CodingEngine` from day one, this is just writing a new class.
@@ -840,7 +859,7 @@ ui:
 
 To access the mini pc for deployment testing purposes, you can use the command `ssh_robomesh` and it is essentially an ssh wrapper with all the credentials filled out. The working directory for this project is `~/coding_agent_temp/` in the mini pc.
 
-The github repository to test the deployed code on is https://github.com/shaply/cf_ai_resumebuilder. There are issues to read from and a DIRECTIONS.md file.
+The github repository to test the deployed code on is <https://github.com/shaply/cf_ai_resumebuilder>. There are issues to read from and a DIRECTIONS.md file.
 
 ---
 

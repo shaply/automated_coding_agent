@@ -97,6 +97,20 @@ export const resolveStepFailure = (id: string, choice: string) =>
 export const listIssues = () =>
   request<{ issues: GitHubIssue[] }>('/issues');
 
+export const refreshIssues = () =>
+  request<{ issues: GitHubIssue[]; message: string }>('/schedule/refresh', { method: 'POST' });
+
+// --- Schedule ---
+
+export interface ScheduleInfo {
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  next_run: string | null;
+}
+
+export const getSchedule = () => request<ScheduleInfo>('/schedule');
+
 // --- Status + Usage ---
 
 export const getStatus = () =>
@@ -104,6 +118,11 @@ export const getStatus = () =>
 
 export const getUsage = () =>
   request<{ usage: UsageEntry[] }>('/usage');
+
+// --- Logs ---
+
+export const getLogs = (lines = 200) =>
+  request<{ lines: string[] }>(`/logs?lines=${lines}`);
 
 // --- SSE log stream ---
 

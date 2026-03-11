@@ -211,6 +211,60 @@ async def get_usage():
     return {"usage": usage_db.get_all_usage()}
 
 
+@router.get("/schedule")
+async def get_schedule():
+    """Return current schedule config and when the next run is."""
+    from main import CONFIG, scheduler
+    next_run = None
+    job = scheduler.get_job("scheduled_run") if scheduler.running else None
+    if job and job.next_run_time:
+        next_run = job.next_run_time.isoformat()
+    return {
+        "enabled": CONFIG["schedule"]["enabled"],
+        "time": CONFIG["schedule"]["time"],
+        "timezone": CONFIG["schedule"]["timezone"],
+        "next_run": next_run,
+    }
+
+
+@router.post("/schedule/refresh")
+async def refresh_issues():
+    """
+    Re-fetch GitHub issues right now (no LLM — free operation).
+    Returns the current issue list so the UI can update immediately.
+    """
+    from main import app_state, CONFIG
+    github_client = app_state["github_client"]
+    if github_client is None:
+        return {"issues": [], "message": "GitHub not configured."}
+    assignee = CONFIG["project"].get("github_assignee", "")
+    if not assignee:
+        return {"issues": [], "message": "github_assignee not set in config."}
+    issues = await __import__("asyncio").get_event_loop().run_in_executor(
+        None, lambda: github_client.get_assigned_issues(assignee)
+    )
+    return {
+        "issues": [
+            {"number": i.number, "title": i.title, "body": i.body, "url": i.url, "labels": i.labels}
+            for i in issues
+        ],
+        "message": f"Fetched {len(issues)} issue(s).",
+    }
+
+
+@router.get("/logs")
+async def get_logs(lines: int = 200):
+    """Return the last N lines of /data/autodev.log for viewing in the UI."""
+    import os
+    log_path = os.environ.get("AUTODEV_DATA_DIR", "/data") + "/autodev.log"
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+        return {"lines": [l.rstrip() for l in all_lines[-lines:]]}
+    except FileNotFoundError:
+        return {"lines": []}
+
+
 # --- Helpers ---
 
 def _state_to_response(state) -> dict:

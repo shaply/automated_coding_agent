@@ -17,6 +17,7 @@ Or via uvicorn:
 
 import asyncio
 import logging
+import logging.handlers
 import os
 import shutil
 import sys
@@ -42,9 +43,27 @@ from orchestrator.session import SessionManager
 from orchestrator.workflow import Workflow, WorkflowConfig
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Logging — console + rotating file at /data/autodev.log
+# ---------------------------------------------------------------------------
+
+_LOG_FMT = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
+_DATA_DIR_EARLY = os.environ.get("AUTODEV_DATA_DIR", "/data")
+Path(_DATA_DIR_EARLY).mkdir(parents=True, exist_ok=True)
+
+_file_handler = logging.handlers.RotatingFileHandler(
+    filename=f"{_DATA_DIR_EARLY}/autodev.log",
+    maxBytes=5 * 1024 * 1024,  # 5 MB per file
+    backupCount=3,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(_LOG_FMT))
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    format=_LOG_FMT,
+    handlers=[logging.StreamHandler(), _file_handler],
 )
 logger = logging.getLogger(__name__)
 
@@ -149,7 +168,7 @@ async def lifespan(_: FastAPI):
     if CONFIG["schedule"]["enabled"]:
         run_time = CONFIG["schedule"]["time"]
         hour, minute = run_time.split(":")
-        scheduler.add_job(scheduled_run, "cron", hour=int(hour), minute=int(minute))
+        scheduler.add_job(scheduled_run, "cron", hour=int(hour), minute=int(minute), id="scheduled_run")
         scheduler.start()
         logger.info(
             "Scheduler started — daily run at %s %s",

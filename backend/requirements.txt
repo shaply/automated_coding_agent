@@ -9,7 +9,8 @@ pyyaml>=6.0.1
 litellm>=1.40.0
 
 # Coding engine
-aider-install>=0.2.0
+# aider-chat provides the `aider` Python module (from aider.coders import Coder, etc.)
+aider-chat>=0.70.0
 
 # GitHub + Git
 PyGithub>=2.3.0
