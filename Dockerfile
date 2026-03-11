@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -12,6 +12,7 @@ COPY backend/requirements.txt .
 # aider-install (the meta-package) creates its own venv, which doesn't work in Docker.
 # Instead we install aider-chat directly — the underlying package aider-install would fetch.
 # For LOCAL dev outside Docker: pip install aider-install && aider-install
+RUN pip install --no-cache-dir setuptools wheel
 RUN pip install --no-cache-dir aider-chat
 RUN pip install --no-cache-dir -r requirements.txt
 
