@@ -3,9 +3,12 @@ agent:
   max_steps_per_session: 20         # safety cap on total plan steps executed per run
 
 project:
-  github_repo: your-username/your-repo   # repo to clone per task
-  test_command: pytest                   # command to run after every implementation step
-  lint_command: ruff check .             # linter to run before tests
+  github_repo: shaply/cf_ai_resumebuilder  # repo to clone per task
+  github_assignee: shaply                  # GitHub username for scheduled issue pickup
+  base_branch: main                        # base branch for PRs
+  run_tests: false                         # target repo has no test suite
+  test_command: pytest                     # command to run if run_tests is true
+  lint_command: ruff check .               # linter to run before tests
 
 schedule:
   enabled: true

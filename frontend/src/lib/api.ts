@@ -15,6 +15,16 @@ export interface Task {
   branch_name: string;
   pr_url: string;
   halt_reason: string;
+  step_failure_info: { step?: number; description?: string; output?: string } | null;
+  issue_number: number | null;
+}
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  body: string;
+  url: string;
+  labels: string[];
 }
 
 export interface UsageEntry {
@@ -41,10 +51,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // --- Tasks ---
 
-export const createTask = (description: string) =>
+export const createTask = (description: string, issue_number?: number) =>
   request<{ task_id: string; status: string }>('/tasks', {
     method: 'POST',
-    body: JSON.stringify({ description }),
+    body: JSON.stringify({ description, issue_number: issue_number ?? null }),
   });
 
 export const listTasks = () => request<Task[]>('/tasks');
@@ -76,6 +86,17 @@ export const approveDiff = (id: string) =>
 export const rejectDiff = (id: string) =>
   request<{ ok: boolean }>(`/tasks/${id}/diff/reject`, { method: 'POST' });
 
+export const resolveStepFailure = (id: string, choice: string) =>
+  request<{ ok: boolean }>(`/tasks/${id}/step-failure`, {
+    method: 'POST',
+    body: JSON.stringify({ choice }),
+  });
+
+// --- GitHub Issues ---
+
+export const listIssues = () =>
+  request<{ issues: GitHubIssue[] }>('/issues');
+
 // --- Status + Usage ---
 
 export const getStatus = () =>
@@ -87,11 +108,9 @@ export const getUsage = () =>
 // --- SSE log stream ---
 
 export function openLogStream(taskId: string, onMessage: (msg: string) => void): EventSource {
-  const es = new EventSource(`${BASE_URL}/tasks/${taskId}/stream`, {
-    // EventSource doesn't support custom headers natively;
-    // the backend should allow the token via a query param for SSE, or use a cookie.
-    // For Phase 4+, consider a cookie-based auth or proxy approach.
-  } as EventSourceInit);
+  // Token passed as query param — EventSource can't send Authorization headers.
+  const url = `${BASE_URL}/tasks/${taskId}/stream?token=${encodeURIComponent(TOKEN)}`;
+  const es = new EventSource(url);
   es.onmessage = (event) => {
     const data = JSON.parse(event.data);
     onMessage(data.message);

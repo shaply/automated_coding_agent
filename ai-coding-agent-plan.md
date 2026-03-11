@@ -836,6 +836,14 @@ ui:
 
 ---
 
+## Local tools for development
+
+To access the mini pc for deployment testing purposes, you can use the command `ssh_robomesh` and it is essentially an ssh wrapper with all the credentials filled out. The working directory for this project is `~/coding_agent_temp/` in the mini pc.
+
+The github repository to test the deployed code on is https://github.com/shaply/cf_ai_resumebuilder. There are issues to read from and a DIRECTIONS.md file.
+
+---
+
 ## Existing Tools to Study (not build from)
 
 | Tool | What to learn from it |

@@ -20,6 +20,7 @@ AgentStatus = Literal[
     "planning",
     "awaiting_plan_review",
     "coding",
+    "awaiting_step_review",
     "awaiting_diff_review",
     "halted",
     "halted:credits_exhausted",
@@ -51,6 +52,8 @@ class SessionState:
     branch_name: str = ""
     repo_path: str = ""
     pr_url: str = ""
+    issue_number: int | None = None
+    step_failure_info: dict = field(default_factory=dict)
 
 
 class SessionManager:

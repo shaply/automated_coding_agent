@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getStatus, getUsage, createTask, type Task, type UsageEntry } from '$lib/api';
+  import { getStatus, getUsage, createTask, listIssues, type UsageEntry, type GitHubIssue } from '$lib/api';
 
   let status = 'loading…';
   let taskId = '';
   let usage: UsageEntry[] = [];
+  let issues: GitHubIssue[] = [];
   let newTask = '';
   let error = '';
   let submitting = false;
@@ -21,12 +22,21 @@
     }
   }
 
-  async function submitTask() {
-    if (!newTask.trim()) return;
+  async function loadIssues() {
+    try {
+      const res = await listIssues();
+      issues = res.issues;
+    } catch {
+      // GitHub not configured — silently ignore
+    }
+  }
+
+  async function submitTask(description = newTask.trim(), issue_number?: number) {
+    if (!description) return;
     submitting = true;
     error = '';
     try {
-      const res = await createTask(newTask.trim());
+      const res = await createTask(description, issue_number);
       taskId = res.task_id;
       newTask = '';
       await refresh();
@@ -37,8 +47,14 @@
     }
   }
 
+  async function startFromIssue(issue: GitHubIssue) {
+    const description = `#${issue.number}: ${issue.title}\n\n${issue.body}`;
+    await submitTask(description, issue.number);
+  }
+
   onMount(() => {
     refresh();
+    loadIssues();
     const interval = setInterval(refresh, 5000);
     return () => clearInterval(interval);
   });
@@ -73,15 +89,35 @@
       placeholder="Describe what you want AutoDev to build or fix…"
       rows="4"
     ></textarea>
-    <button on:click={submitTask} disabled={submitting || !newTask.trim()}>
+    <button on:click={() => submitTask()} disabled={submitting || !newTask.trim()}>
       {submitting ? 'Submitting…' : 'Start Task'}
     </button>
   </section>
+
+  {#if issues.length > 0}
+    <section class="issues">
+      <h2>Open GitHub Issues</h2>
+      {#each issues as issue}
+        <div class="issue-row">
+          <div class="issue-meta">
+            <span class="issue-number">#{issue.number}</span>
+            <span class="issue-title">{issue.title}</span>
+            {#each issue.labels as label}
+              <span class="issue-label">{label}</span>
+            {/each}
+          </div>
+          <button class="btn btn-sm" on:click={() => startFromIssue(issue)} disabled={submitting}>
+            Start
+          </button>
+        </div>
+      {/each}
+    </section>
+  {/if}
 {:else if status === 'awaiting_plan_review'}
   <section class="action-prompt">
     <a href="/plan/{taskId}" class="btn">Review Plan →</a>
   </section>
-{:else if status === 'coding'}
+{:else if status === 'coding' || status === 'awaiting_step_review'}
   <section class="action-prompt">
     <a href="/log/{taskId}" class="btn">Watch Live Log →</a>
   </section>
@@ -194,6 +230,27 @@
   .halted-actions { margin-top: 0.75rem; display: flex; gap: 0.75rem; }
 
   .error { color: #f85149; font-size: 0.9rem; }
+
+  .issues { margin-bottom: 1.5rem; }
+  .issue-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #21262d;
+    gap: 1rem;
+  }
+  .issue-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; flex: 1; min-width: 0; }
+  .issue-number { color: #8b949e; font-size: 0.85rem; white-space: nowrap; }
+  .issue-title { color: #e6edf3; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .issue-label {
+    background: #1f6feb33;
+    color: #58a6ff;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    padding: 0.1em 0.5em;
+  }
+  .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.85rem; white-space: nowrap; }
 
   .usage table {
     width: 100%;

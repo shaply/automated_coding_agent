@@ -1,8 +1,12 @@
 """
-AutoDev backend entry point.
+AutoDev backend entry point — Phase 3/4/5.
 
-Phase 1: FastAPI app + APScheduler + plain while-loop workflow.
-Phase 3: This becomes a full LangGraph-backed async service.
+Architecture:
+  - Workflow runs in a thread pool executor (blocking code off the event loop)
+  - threading.Events bridge the API layer → workflow callbacks
+  - Ephemeral repo clone per task in /tmp/autodev-task-{id}/
+  - Git safety check on every task start
+  - GitHub integration: fetch issues, push branch, open PR on approval
 
 Run locally:
     python main.py
@@ -14,7 +18,10 @@ Or via uvicorn:
 import asyncio
 import logging
 import os
+import shutil
 import sys
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -26,6 +33,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import router
 from engine.aider_engine import AiderEngine
+from integrations.git_client import GitClient, GitSafetyError
+from integrations.github_client import GitHubClient
 from integrations.llm_client import LLMClient
 from integrations.usage_db import UsageDB
 from orchestrator.planner import Planner
@@ -50,12 +59,12 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 CONFIG = load_config()
-
-# ---------------------------------------------------------------------------
-# Shared application state (injected into routes via app_state global)
-# ---------------------------------------------------------------------------
-
 DATA_DIR = os.environ.get("AUTODEV_DATA_DIR", "/data")
+
+
+# ---------------------------------------------------------------------------
+# Singletons
+# ---------------------------------------------------------------------------
 
 usage_db = UsageDB(
     db_path=f"{DATA_DIR}/usage.db",
@@ -70,76 +79,62 @@ llm = LLMClient(
     usage_db=usage_db,
 )
 
+# Engine and planner — repo_path is set per-task before the workflow starts
 engine = AiderEngine(
     model_name=CONFIG["providers"][CONFIG["providers"]["fallback_order"][0]]["model"],
-    repo_path="",  # set per-task at runtime
+    repo_path="",
     test_command=CONFIG["project"].get("test_command", "pytest"),
     lint_command=CONFIG["project"].get("lint_command", "ruff check ."),
 )
 
-planner = Planner(llm=llm, repo_path="")  # repo_path set per-task
+planner = Planner(llm=llm, repo_path="")
 
-# asyncio events for API→workflow signalling (Phase 1 approach; replaced by LangGraph in Ph3)
+# GitHub client — optional; only created when credentials are present
+_github_token = os.environ.get("GITHUB_TOKEN", "")
+_github_repo = CONFIG["project"].get("github_repo", "")
+github_client: GitHubClient | None = None
+if _github_token and _github_repo:
+    try:
+        github_client = GitHubClient(token=_github_token, repo_name=_github_repo)
+        logger.info("GitHub client initialised for %s", _github_repo)
+    except Exception as exc:
+        logger.warning("GitHub client failed to initialise: %s", exc)
+
+git_client = GitClient(
+    remote_url=f"https://{_github_token}@github.com/{_github_repo}.git" if _github_token and _github_repo else "",
+    base_branch=CONFIG["project"].get("base_branch", "main"),
+)
+
+# ---------------------------------------------------------------------------
+# Inter-thread signalling (API → blocked workflow thread)
+# threading.Event is required here — the workflow runs in a thread pool, not
+# the asyncio event loop, so asyncio.Event cannot be used.
+# ---------------------------------------------------------------------------
+
+def _fresh_events() -> dict:
+    return {
+        # Plan review
+        "plan_event": threading.Event(),
+        "plan_action": None,    # "approve" | "refine"
+        "plan_comment": "",
+        # Diff review
+        "diff_event": threading.Event(),
+        "diff_action": None,    # "approve" | "reject"
+        # Step failure (self-correction cap hit)
+        "step_failure_event": threading.Event(),
+        "step_failure_choice": "abort",  # "abort" | "skip" | <comment>
+    }
+
+
 app_state = {
     "session": session,
     "usage_db": usage_db,
     "engine": engine,
     "planner": planner,
-    "plan_approved": asyncio.Event(),
-    "diff_approved": asyncio.Event(),
-    "diff_rejected": asyncio.Event(),
+    "github_client": github_client,
+    "git_client": git_client,
+    **_fresh_events(),
 }
-
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
-
-app = FastAPI(title="AutoDev", version="0.1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(router)
-
-# ---------------------------------------------------------------------------
-# Workflow runner (called by POST /tasks and APScheduler)
-# ---------------------------------------------------------------------------
-
-async def run_workflow_async(task: str) -> None:
-    """Run the workflow in an asyncio-friendly way (blocking calls in thread pool)."""
-    loop = asyncio.get_event_loop()
-
-    workflow_config = WorkflowConfig(
-        max_self_correction_attempts=CONFIG["agent"]["max_self_correction_attempts"],
-        max_steps_per_session=CONFIG["agent"]["max_steps_per_session"],
-    )
-
-    def _log(msg: str) -> None:
-        logger.info(msg)
-        from api.sse import publish_log
-        publish_log(session.state.task_id, msg)
-
-    workflow = Workflow(
-        session=session,
-        planner=planner,
-        engine=engine,
-        config=workflow_config,
-        log_cb=_log,
-    )
-
-    try:
-        await loop.run_in_executor(None, workflow.run, task)
-    except Exception as exc:
-        logger.exception("Workflow crashed: %s", exc)
-        session.update(status="halted", halt_reason=str(exc))
-    finally:
-        from api.sse import close_stream
-        close_stream(session.state.task_id)
 
 
 # ---------------------------------------------------------------------------
@@ -149,52 +144,138 @@ async def run_workflow_async(task: str) -> None:
 scheduler = AsyncIOScheduler(timezone=CONFIG["schedule"]["timezone"])
 
 
-async def scheduled_run() -> None:
-    if session.state.status not in ("idle", "done"):
-        logger.info(
-            "Scheduled run skipped — task %s already in progress (status: %s)",
-            session.state.task_id,
-            session.state.status,
-        )
-        return
-    logger.info("Scheduler triggered — starting automated run.")
-    # Automated run: pull task from GitHub issues (Phase 5). For now, skip if no task provided.
-    logger.info("No automated task source configured. Scheduler run skipped.")
-
-
-@app.on_event("startup")
-async def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     if CONFIG["schedule"]["enabled"]:
         run_time = CONFIG["schedule"]["time"]
         hour, minute = run_time.split(":")
         scheduler.add_job(scheduled_run, "cron", hour=int(hour), minute=int(minute))
         scheduler.start()
-        logger.info("Scheduler started — daily run at %s %s", run_time, CONFIG["schedule"]["timezone"])
-
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
+        logger.info(
+            "Scheduler started — daily run at %s %s",
+            run_time, CONFIG["schedule"]["timezone"],
+        )
+    yield
     if scheduler.running:
         scheduler.shutdown(wait=False)
     usage_db.close()
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point (Phase 1 only — run without Docker / uvicorn)
+# FastAPI app
 # ---------------------------------------------------------------------------
 
-def cli_run() -> None:
-    """Run a single task interactively from the command line."""
-    if len(sys.argv) < 2:
-        print("Usage: python main.py '<task description>'")
-        sys.exit(1)
+app = FastAPI(title="AutoDev", version="0.1.0", lifespan=lifespan)
 
-    task = " ".join(sys.argv[1:])
-    print(f"AutoDev CLI — task: {task}\n")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+app.include_router(router)
+
+
+# ---------------------------------------------------------------------------
+# Workflow runner
+# ---------------------------------------------------------------------------
+
+async def run_workflow_async(task: str, issue_number: int | None = None) -> None:
+    """
+    Run the full task lifecycle:
+      1. Clone repo into ephemeral temp dir
+      2. Git safety check
+      3. Create feature branch
+      4. Run workflow (plan → review → code → review → push/PR)
+      5. Clean up temp dir
+    """
+    from api.sse import publish_log, close_stream
+
+    # Reset signalling events for the new task
+    events = _fresh_events()
+    app_state.update(events)
+
+    task_id = session.state.task_id  # already set by POST /tasks
+    repo_path: str | None = None
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        publish_log(task_id, msg)
+
+    # -- 1. Clone repo ---------------------------------------------------
+    repo = None  # may remain None in local mode
+    if git_client.remote_url:
+        _log(f"Cloning {_github_repo} …")
+        try:
+            repo, clone_path = await asyncio.get_event_loop().run_in_executor(
+                None, git_client.clone_ephemeral, task_id
+            )
+            repo_path = str(clone_path)
+        except Exception as exc:
+            _log(f"Clone failed: {exc}")
+            session.update(status="halted", halt_reason=f"Clone failed: {exc}")
+            close_stream(task_id)
+            return
+    else:
+        _log("No GitHub repo configured — working in local mode (no clone).")
+
+    # -- 2. Git safety check + feature branch ----------------------------
+    if repo_path:
+        branch_name = (
+            f"autodev/issue-{issue_number}" if issue_number
+            else f"autodev/task-{task_id[:8]}"
+        )
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: _setup_branch(repo, repo_path, branch_name)
+            )
+            session.update(branch_name=branch_name, repo_path=repo_path)
+            _log(f"Feature branch: {branch_name}")
+        except GitSafetyError as exc:
+            _log(f"Git safety check failed: {exc}")
+            session.update(status="halted", halt_reason=str(exc))
+            close_stream(task_id)
+            _cleanup(repo_path)
+            return
+
+        # Point engine and planner at the cloned repo
+        engine.repo_path = Path(repo_path)
+        planner.repo_path = repo_path
+
+    # -- 3. Build blocking callbacks (safe to block — we're in a thread) --
+
+    def _review_plan_cb(_: list[str]) -> tuple[bool, str | None]:
+        while True:
+            app_state["plan_event"].clear()
+            app_state["plan_event"].wait()
+            action = app_state["plan_action"]
+            if action == "approve":
+                return True, None
+            if action == "refine":
+                return False, app_state["plan_comment"]
+
+    def _review_diff_cb(_: str) -> bool:
+        app_state["diff_event"].clear()
+        app_state["diff_event"].wait()
+        return app_state["diff_action"] == "approve"
+
+    def _step_failure_cb(step_idx: int, step: str, test_output: str) -> str:
+        session.update(
+            status="awaiting_step_review",
+            step_failure_info={"step": step_idx, "description": step, "output": test_output},
+        )
+        app_state["step_failure_event"].clear()
+        app_state["step_failure_event"].wait()
+        session.update(status="coding")
+        return app_state["step_failure_choice"]
+
+    # -- 4. Run workflow --------------------------------------------------
     workflow_config = WorkflowConfig(
         max_self_correction_attempts=CONFIG["agent"]["max_self_correction_attempts"],
         max_steps_per_session=CONFIG["agent"]["max_steps_per_session"],
+        run_tests=CONFIG["project"].get("run_tests", True),
     )
 
     workflow = Workflow(
@@ -202,7 +283,130 @@ def cli_run() -> None:
         planner=planner,
         engine=engine,
         config=workflow_config,
+        review_plan_cb=_review_plan_cb,
+        review_diff_cb=_review_diff_cb,
+        step_failure_cb=_step_failure_cb,
+        log_cb=_log,
     )
+
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, workflow.run, task)
+    except Exception as exc:
+        logger.exception("Workflow crashed: %s", exc)
+        session.update(status="halted", halt_reason=str(exc))
+        close_stream(task_id)
+        _cleanup(repo_path)
+        return
+
+    # -- 5. Push branch + open PR (if approved) --------------------------
+    final_status = session.state.status
+    if final_status == "done" and repo is not None and repo_path and git_client.remote_url:
+        _log("Pushing branch …")
+        try:
+            _repo = repo  # capture for lambda — repo is not None here
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: git_client.push_branch(_repo, session.state.branch_name)
+            )
+            _log(f"Branch pushed: {session.state.branch_name}")
+        except Exception as exc:
+            _log(f"Push failed: {exc}")
+
+        _gh = github_client  # narrow away None for type checker
+        if _gh is not None:
+            try:
+                pr_title = _pr_title(task, issue_number)
+                pr_body_text = _pr_body(session.state, issue_number)
+                pr_url = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: _gh.open_pull_request(
+                        branch=session.state.branch_name,
+                        title=pr_title,
+                        body=pr_body_text,
+                        base=CONFIG["project"].get("base_branch", "main"),
+                    ),
+                )
+                session.update(pr_url=pr_url)
+                _log(f"PR opened: {pr_url}")
+            except Exception as exc:
+                _log(f"PR creation failed: {exc}")
+
+    close_stream(task_id)
+    _cleanup(repo_path)
+
+
+def _setup_branch(repo, _: str, branch_name: str) -> None:
+    """Create feature branch on a fresh clone (nothing to pull)."""
+    git_client.create_feature_branch(repo, branch_name)
+
+
+def _cleanup(repo_path: str | None) -> None:
+    if repo_path and Path(repo_path).exists():
+        shutil.rmtree(repo_path, ignore_errors=True)
+        logger.info("Wiped ephemeral repo: %s", repo_path)
+
+
+def _pr_title(task: str, issue_number: int | None) -> str:
+    prefix = f"[AutoDev] Fix #{issue_number}: " if issue_number else "[AutoDev] "
+    return (prefix + task)[:72]
+
+
+def _pr_body(state, issue_number: int | None) -> str:
+    steps = "\n".join(f"- {s}" for s in state.plan)
+    issue_ref = f"\nCloses #{issue_number}" if issue_number else ""
+    return (
+        f"## Summary\nAutomatically generated by AutoDev.\n\n"
+        f"**Task:** {state.task_description}\n\n"
+        f"## Plan\n{steps}\n{issue_ref}\n\n"
+        f"---\n*Review the diff carefully before merging.*"
+    )
+
+
+async def scheduled_run() -> None:
+    if session.state.status not in ("idle", "done"):
+        logger.info(
+            "Scheduled run skipped — task %s in progress (status: %s)",
+            session.state.task_id, session.state.status,
+        )
+        return
+
+    if not github_client:
+        logger.info("Scheduler: no GitHub client configured, skipping.")
+        return
+
+    assignee = CONFIG["project"].get("github_assignee", "")
+    if not assignee:
+        logger.info("Scheduler: project.github_assignee not set, skipping.")
+        return
+
+    issues = github_client.get_assigned_issues(assignee)
+    if not issues:
+        logger.info("Scheduler: no assigned issues found.")
+        return
+
+    issue = issues[0]
+    logger.info("Scheduler: starting task from issue #%d: %s", issue.number, issue.title)
+    task_desc = f"#{issue.number}: {issue.title}\n\n{issue.body}"
+    session.reset()
+    import asyncio as _asyncio
+    _asyncio.create_task(run_workflow_async(task_desc, issue_number=issue.number))
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+def cli_run() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: python main.py '<task description>'")
+        sys.exit(1)
+    task = " ".join(sys.argv[1:])
+    print(f"AutoDev CLI — task: {task}\n")
+    workflow_config = WorkflowConfig(
+        max_self_correction_attempts=CONFIG["agent"]["max_self_correction_attempts"],
+        max_steps_per_session=CONFIG["agent"]["max_steps_per_session"],
+        run_tests=CONFIG["project"].get("run_tests", True),
+    )
+    workflow = Workflow(session=session, planner=planner, engine=engine, config=workflow_config)
     workflow.run(task)
 
 

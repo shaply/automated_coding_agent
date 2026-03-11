@@ -63,3 +63,21 @@ def test_session_file_created_in_nonexistent_dir(tmp_path):
     mgr.update(task_id="x")
     mgr2 = SessionManager(path)
     assert mgr2.state.task_id == "x"
+
+
+def test_session_step_failure_info(session_path):
+    mgr = SessionManager(session_path)
+    mgr.update(
+        status="awaiting_step_review",
+        step_failure_info={"step": 2, "description": "write tests", "output": "FAILED"},
+    )
+    mgr2 = SessionManager(session_path)
+    assert mgr2.state.status == "awaiting_step_review"
+    assert mgr2.state.step_failure_info["step"] == 2
+
+
+def test_session_issue_number(session_path):
+    mgr = SessionManager(session_path)
+    mgr.update(issue_number=42)
+    mgr2 = SessionManager(session_path)
+    assert mgr2.state.issue_number == 42
