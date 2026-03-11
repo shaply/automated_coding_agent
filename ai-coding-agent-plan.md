@@ -646,15 +646,15 @@ Add RPM/TPM tracking columns to `usage_db.py` to enable the proactive throttling
 ### PHASE 3 — Docker + FastAPI Backend + LangGraph
 *Goal: move off CLI, get the agent running as a proper service; introduce LangGraph now that async state management is needed*
 
-- [ ] **Bearer token auth middleware** (`auth.py`): every endpoint requires `Authorization: Bearer <token>`, returns 401 otherwise
-- [ ] **Concurrency enforcement**: `POST /tasks` returns 409 if agent is not idle; scheduler skips if agent is busy
-- [ ] Dockerfile for the backend, `docker-compose.yml` for the full stack
+- [x] **Bearer token auth middleware** (`auth.py`): every endpoint requires `Authorization: Bearer <token>`, returns 401 otherwise
+- [x] **Concurrency enforcement**: `POST /tasks` returns 409 if agent is not idle; scheduler skips if agent is busy
+- [x] Dockerfile for the backend, `docker-compose.yml` for the full stack
 - [ ] Ephemeral repo clone per task: agent works in `/tmp/task-{id}/`, volume only holds state + logs
 - [ ] Git safety check on every startup: dirty tree / merge conflict → halt + alert
-- [ ] FastAPI app wrapping the orchestrator: all workflow transitions via API endpoints
+- [x] FastAPI app wrapping the orchestrator: all workflow transitions via API endpoints
 - [ ] **Replace while loop with LangGraph** — now that FastAPI needs to manage long-running async state across HTTP requests, LangGraph earns its place
-- [ ] **SSE endpoint** (`GET /tasks/{id}/stream`) streaming live agent log output — not WebSockets
-- [ ] Tailscale installed on mini PC, backend accessible remotely
+- [x] **SSE endpoint** (`GET /tasks/{id}/stream`) streaming live agent log output — not WebSockets
+- [x] Tailscale installed on mini PC, backend accessible remotely
 
 **Exit criteria:** Agent runs in Docker on mini PC. You can hit the API from your laptop and see live logs via SSE. Git safety checks prevent the agent from running on a dirty repo.
 
