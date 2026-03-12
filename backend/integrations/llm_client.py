@@ -113,6 +113,16 @@ class LLMClient:
             except RateLimitError:
                 logger.warning("Provider %s exhausted retries on rate limit. Trying next.", provider)
                 continue
+            except litellm.exceptions.BadRequestError as exc:
+                # Treat billing/credit errors as budget exhaustion → fallback, not crash
+                msg = str(exc).lower()
+                if "credit" in msg or "billing" in msg or "balance" in msg or "quota" in msg:
+                    logger.warning(
+                        "Provider %s billing error (credit/quota issue) — skipping to next provider. Error: %s",
+                        provider, exc,
+                    )
+                    continue
+                raise  # other bad request errors (e.g. invalid prompt) should propagate
             except ContextWindowExceededError as exc:
                 logger.error(
                     "Context window exceeded for %s (model=%s): %s — not retrying.",
