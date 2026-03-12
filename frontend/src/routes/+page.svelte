@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getStatus, getUsage, createTask, listIssues, refreshIssues, getSchedule,
+    getStatus, getUsage, createTask, listIssues, refreshIssues, getSchedule, resetSession,
     type UsageEntry, type GitHubIssue, type ScheduleInfo
   } from '$lib/api';
 
@@ -14,6 +14,7 @@
   let error = '';
   let submitting = false;
   let refreshing = false;
+  let resetting = false;
 
   async function refresh() {
     try {
@@ -70,6 +71,19 @@
       error = e.message;
     } finally {
       submitting = false;
+    }
+  }
+
+  async function doReset() {
+    resetting = true;
+    error = '';
+    try {
+      await resetSession();
+      await refresh();
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      resetting = false;
     }
   }
 
@@ -161,10 +175,18 @@
           <p>Daily credits exhausted. You can review the partial diff or wait until tomorrow.</p>
           <div class="halted-actions">
             <a href="/diff/{taskId}" class="btn btn-secondary">Review Partial Diff</a>
+            <button class="btn btn-secondary" on:click={doReset} disabled={resetting}>
+              {resetting ? 'Resetting…' : '↺ Reset to Idle'}
+            </button>
           </div>
         {:else}
-          <p>Check the task detail for the halt reason.</p>
-          <a href="/plan/{taskId}" class="btn btn-secondary">View Task →</a>
+          <p>Check the logs for the halt reason.</p>
+          <div class="halted-actions">
+            <a href="/logs" class="btn btn-secondary">View Logs →</a>
+            <button class="btn btn-secondary" on:click={doReset} disabled={resetting}>
+              {resetting ? 'Resetting…' : '↺ Reset to Idle'}
+            </button>
+          </div>
         {/if}
       </section>
     {/if}

@@ -318,6 +318,24 @@ async def save_config(body: SaveConfigRequest):
     return {"ok": True, "message": "Config saved. Restart the container to apply changes."}
 
 
+@router.post("/admin/reset")
+async def reset_session():
+    """
+    Reset the session back to idle, discarding any halted/done state.
+    Safe to call whenever the agent is not actively running a task.
+    """
+    from main import app_state
+    session = app_state["session"]
+    active = {"planning", "awaiting_plan_review", "coding", "awaiting_step_review", "awaiting_diff_review"}
+    if session.state.status in active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot reset while agent is actively running (status: {session.state.status}).",
+        )
+    session.reset()
+    return {"ok": True, "status": session.state.status}
+
+
 @router.post("/admin/stop")
 async def graceful_stop():
     """

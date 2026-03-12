@@ -161,6 +161,9 @@ export const saveConfig = (yaml_text: string) =>
 export const stopAgent = () =>
   request<{ ok: boolean; message: string }>('/admin/stop', { method: 'POST' });
 
+export const resetSession = () =>
+  request<{ ok: boolean; status: string }>('/admin/reset', { method: 'POST' });
+
 // --- SSE log stream ---
 
 export function openLogStream(taskId: string, onMessage: (msg: string) => void): EventSource {
