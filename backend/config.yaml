@@ -29,7 +29,7 @@ providers:
     context_window: 200000
     min_request_interval: 12.0      # seconds between requests (60 / rpm_limit + buffer)
   gemini:
-    model: gemini/gemini-3-flash
+    model: gemini/gemini-2.0-flash
     api_key_env: GEMINI_API_KEY
     daily_token_budget: 1500        # requests per day on free tier
     rpm_limit: 5
