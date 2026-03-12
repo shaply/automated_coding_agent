@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import { getLogs } from '$lib/api';
 
   type Level = 'ALL' | 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
@@ -7,6 +7,7 @@
   interface ParsedLine {
     raw: string;
     level: Level;
+    date: string; // YYYY-MM-DD extracted from timestamp, or '' if unparseable
   }
 
   let allLines: ParsedLine[] = [];
@@ -14,8 +15,13 @@
   let error = '';
   let lineCount = 500;
   let activeLevel: Level = 'ALL';
+  let activeDate = 'ALL';
+  let logEl: HTMLElement;
+  let shouldScroll = true;
 
   const LEVELS: Level[] = ['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR'];
+
+  const DATE_RE = /^(\d{4}-\d{2}-\d{2})/;
 
   function parseLevel(line: string): Level {
     if (/\bERROR\b/.test(line))   return 'ERROR';
@@ -25,20 +31,41 @@
     return 'INFO';
   }
 
+  function parseDate(line: string): string {
+    const m = line.match(DATE_RE);
+    return m ? m[1] : '';
+  }
+
   function levelClass(level: Level): string {
     return `line-${level.toLowerCase()}`;
   }
 
-  $: filteredLines = activeLevel === 'ALL'
-    ? allLines
-    : allLines.filter(l => l.level === activeLevel);
+  $: uniqueDates = (() => {
+    const seen = new Set<string>();
+    for (const l of allLines) if (l.date) seen.add(l.date);
+    return [...seen].sort().reverse(); // most recent first
+  })();
+
+  $: filteredLines = allLines.filter(l => {
+    if (activeLevel !== 'ALL' && l.level !== activeLevel) return false;
+    if (activeDate !== 'ALL' && l.date !== activeDate) return false;
+    return true;
+  });
+
+  // Scroll to bottom after each render when new content arrives
+  afterUpdate(() => {
+    if (shouldScroll && logEl) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  });
 
   async function load() {
     loading = true;
     error = '';
+    shouldScroll = true;
     try {
       const res = await getLogs(lineCount);
-      allLines = res.lines.map(raw => ({ raw, level: parseLevel(raw) }));
+      allLines = res.lines.map(raw => ({ raw, level: parseLevel(raw), date: parseDate(raw) }));
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -62,19 +89,30 @@
   </div>
 </div>
 
-<div class="level-filters">
-  {#each LEVELS as lvl}
-    <button
-      class="filter-btn filter-{lvl.toLowerCase()}"
-      class:active={activeLevel === lvl}
-      on:click={() => activeLevel = lvl}
-    >
-      {lvl}
-      {#if lvl !== 'ALL'}
-        <span class="count">{allLines.filter(l => l.level === lvl).length}</span>
-      {/if}
-    </button>
-  {/each}
+<div class="filter-row">
+  <div class="level-filters">
+    {#each LEVELS as lvl}
+      <button
+        class="filter-btn filter-{lvl.toLowerCase()}"
+        class:active={activeLevel === lvl}
+        on:click={() => activeLevel = lvl}
+      >
+        {lvl}
+        {#if lvl !== 'ALL'}
+          <span class="count">{allLines.filter(l => l.level === lvl).length}</span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+
+  {#if uniqueDates.length > 0}
+    <select class="date-select" bind:value={activeDate}>
+      <option value="ALL">All dates</option>
+      {#each uniqueDates as d}
+        <option value={d}>{d}</option>
+      {/each}
+    </select>
+  {/if}
 </div>
 
 {#if error}
@@ -84,9 +122,13 @@
 {#if loading}
   <p class="muted">Loading…</p>
 {:else if filteredLines.length === 0}
-  <p class="muted">No log entries{activeLevel !== 'ALL' ? ` at level ${activeLevel}` : ''} yet.</p>
+  <p class="muted">No log entries{activeLevel !== 'ALL' ? ` at level ${activeLevel}` : ''}{activeDate !== 'ALL' ? ` on ${activeDate}` : ''} yet.</p>
 {:else}
-  <div class="log-output">
+  <div class="log-output" bind:this={logEl} on:scroll={() => {
+    // If user scrolls up, stop auto-scrolling; snap back on next load
+    const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+    shouldScroll = atBottom;
+  }}>
     {#each filteredLines as line}
       <div class="log-line {levelClass(line.level)}">{line.raw}</div>
     {/each}
@@ -102,7 +144,7 @@
   }
   h1 { font-size: 1.5rem; }
   .controls { display: flex; gap: 0.75rem; align-items: center; }
-  select {
+  select, .date-select {
     background: #161b22;
     border: 1px solid #30363d;
     border-radius: 6px;
@@ -122,11 +164,16 @@
   button:hover:not(:disabled) { background: #30363d; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* Level filter buttons */
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
   .level-filters {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 0.75rem;
     flex-wrap: wrap;
   }
   .filter-btn {
@@ -162,7 +209,6 @@
     font-size: 0.75rem;
   }
 
-  /* Log output area */
   .log-output {
     background: #0d1117;
     border: 1px solid #30363d;

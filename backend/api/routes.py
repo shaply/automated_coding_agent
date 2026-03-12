@@ -286,6 +286,53 @@ async def get_logs(lines: int = 200):
         return {"lines": []}
 
 
+class SaveConfigRequest(BaseModel):
+    yaml_text: str
+
+
+@router.get("/config")
+async def get_config():
+    """Return the raw config.yaml text."""
+    try:
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            return {"yaml_text": f.read()}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="config.yaml not found.")
+
+
+@router.post("/config")
+async def save_config(body: SaveConfigRequest):
+    """
+    Write new config.yaml content.
+    Validates that the text is parseable YAML before writing.
+    Changes take effect on next container restart (scheduler, LLM clients, etc.
+    are initialised at startup).
+    """
+    import yaml as _yaml
+    try:
+        _yaml.safe_load(body.yaml_text)
+    except _yaml.YAMLError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid YAML: {exc}")
+    with open("config.yaml", "w", encoding="utf-8") as f:
+        f.write(body.yaml_text)
+    return {"ok": True, "message": "Config saved. Restart the container to apply changes."}
+
+
+@router.post("/admin/stop")
+async def graceful_stop():
+    """
+    Gracefully shut down the uvicorn server.
+    Sends SIGTERM to the current process — uvicorn finishes in-flight requests
+    and then exits cleanly. State is persisted by the session manager.
+    """
+    import asyncio, os, signal
+    async def _shutdown():
+        await asyncio.sleep(0.1)  # let this response complete first
+        os.kill(os.getpid(), signal.SIGTERM)
+    asyncio.create_task(_shutdown())
+    return {"ok": True, "message": "Shutdown signal sent."}
+
+
 # --- Helpers ---
 
 def _state_to_response(state) -> dict:

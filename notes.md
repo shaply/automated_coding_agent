@@ -1,20 +1,24 @@
 # Notes on Progress
 
-## Github Integration
+## Tasks for me
 
-I think for now, I'm not going to do the github app method and just use my account. However, in order to differentiate me and the bot, can you add a config in the config.yml like differentiating_label and the point of it is that the bot will only work on issues that are assigned to my github account and have the label. For now, have that label's value be BOT_ASSIGNED.
+Consider setting up one of the laptops to enable browser support.
+
+## Agent
+
+Can the agent run commands, and would it be in a containerized environment. Maybe we allow it to run commands in a containerized environment, so it is able to run the code it writes to make sure it compiles and also run tests.
 
 ## Web UI
 
-The LOG viewing should be better. Should be able to filter logs based on LOG status. Also, there should be different colors associated with different types of logs. And, the log display should be bigger rather than that small window.
-
-For the task scheduling, the dashboard should also have a box on the right side that displays the task queue. As in, what tasks in what order the agent will tackle.
+Log should start at the bottom on website because it is most recent. Also, there should be a filter by date.
 
 ## Logistics
 
-We need to make sure there is enough logging statements to know whether the agent was able to utilize all of the daily API tokens efficiently.
+If the agent is allowed to run, then for some projects, there might be environment variables that are needed. And also, if we want to change any configurations, we have to go redeploy.
 
-Perhaps, on the web UI, there should also be a way to interract with the data in the SQLite database, in order to gather some quick statistics. Could be a new tab like 'agent statistics'.
+Perhaps, we should add a frontend page on web UI that allows us to edit the `backend/config.yaml` that is used by the program. Then, for github repos, we need a way to give environment variables. However, keep in mind that for the environment variables, some github repos will have multiple "programs" in it, so we can't just make a single place to add environment variables.
+
+We also need a way to cleanly stop the program rather than just entering the minipc and ending the docker container, so we can deploy new versions without messing any state things up.
 
 ## Plan
 

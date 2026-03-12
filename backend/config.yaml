@@ -21,7 +21,7 @@ engine:
 
 providers:
   claude:
-    model: claude-3-5-sonnet-20241022
+    model: anthropic/claude-3-5-sonnet-20241022
     api_key_env: ANTHROPIC_API_KEY  # env var name; provider is skipped if unset
     daily_token_budget: 25000       # free tier daily token limit
     rpm_limit: 5                    # requests per minute (free tier)

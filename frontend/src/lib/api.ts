@@ -146,6 +146,21 @@ export const getStats = () => request<StatsResponse>('/stats');
 export const getLogs = (lines = 200) =>
   request<{ lines: string[] }>(`/logs?lines=${lines}`);
 
+// --- Config ---
+
+export const getConfig = () => request<{ yaml_text: string }>('/config');
+
+export const saveConfig = (yaml_text: string) =>
+  request<{ ok: boolean; message: string }>('/config', {
+    method: 'POST',
+    body: JSON.stringify({ yaml_text }),
+  });
+
+// --- Admin ---
+
+export const stopAgent = () =>
+  request<{ ok: boolean; message: string }>('/admin/stop', { method: 'POST' });
+
 // --- SSE log stream ---
 
 export function openLogStream(taskId: string, onMessage: (msg: string) => void): EventSource {
