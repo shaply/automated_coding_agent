@@ -29,13 +29,13 @@ providers:
     context_window: 200000
     min_request_interval: 12.0      # seconds between requests (60 / rpm_limit + buffer)
   gemini:
-    model: gemini/gemini-1.5-flash
+    model: gemini/gemini-3-flash
     api_key_env: GEMINI_API_KEY
     daily_token_budget: 1500        # requests per day on free tier
-    rpm_limit: 15
-    tpm_limit: 1000000
+    rpm_limit: 5
+    tpm_limit: 250000
     context_window: 1000000
-    min_request_interval: 4.0
+    min_request_interval: 20.0
   groq:
     model: groq/llama-3.1-70b-versatile
     api_key_env: GROQ_API_KEY
