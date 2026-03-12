@@ -31,7 +31,7 @@ providers:
   gemini:
     model: gemini/gemini-2.0-flash
     api_key_env: GEMINI_API_KEY
-    daily_token_budget: 1500        # requests per day on free tier
+    daily_token_budget: 1000000        # requests per day on free tier
     rpm_limit: 5
     tpm_limit: 250000
     context_window: 1000000
