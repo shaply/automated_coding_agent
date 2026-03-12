@@ -37,13 +37,13 @@ providers:
     context_window: 1000000
     min_request_interval: 5.0         # 60s / 15 RPM = 4s, add small buffer
   groq:
-    model: groq/llama-3.1-70b-versatile
+    model: groq/llama-3.3-70b-versatile   # 3.3 supersedes 3.1-70b; same limits, better quality
     api_key_env: GROQ_API_KEY
-    daily_token_budget: 100000
-    rpm_limit: 30
-    tpm_limit: 6000
+    daily_token_budget: 500000             # free tier: 500k TPD
+    rpm_limit: 30                          # free tier: 30 RPM
+    tpm_limit: 6000                        # free tier: 6k TPM
     context_window: 128000
-    min_request_interval: 2.0
+    min_request_interval: 2.0             # 60s / 30 RPM = 2s
   fallback_order: [claude, gemini, groq]
   max_retries: 3                    # per provider before triggering fallback (3 keeps total wait reasonable)
 
