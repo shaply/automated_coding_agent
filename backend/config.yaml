@@ -31,11 +31,11 @@ providers:
   gemini:
     model: gemini/gemini-2.0-flash
     api_key_env: GEMINI_API_KEY
-    daily_token_budget: 1000000        # requests per day on free tier
-    rpm_limit: 5
-    tpm_limit: 250000
+    daily_token_budget: 1500          # requests per day on free tier
+    rpm_limit: 15                     # gemini-2.0-flash free tier: 15 RPM
+    tpm_limit: 1000000
     context_window: 1000000
-    min_request_interval: 20.0
+    min_request_interval: 5.0         # 60s / 15 RPM = 4s, add small buffer
   groq:
     model: groq/llama-3.1-70b-versatile
     api_key_env: GROQ_API_KEY
@@ -45,7 +45,7 @@ providers:
     context_window: 128000
     min_request_interval: 2.0
   fallback_order: [claude, gemini, groq]
-  max_retries: 5                    # per provider before triggering fallback
+  max_retries: 3                    # per provider before triggering fallback (3 keeps total wait reasonable)
 
 ui:
   step_by_step: false               # pause between each plan step for micro-review
