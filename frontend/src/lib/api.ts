@@ -3,7 +3,7 @@
  * Reads VITE_API_URL and VITE_API_TOKEN from the environment.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8094';
 const TOKEN = import.meta.env.VITE_API_TOKEN ?? '';
 
 export interface Task {

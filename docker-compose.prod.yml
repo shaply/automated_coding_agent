@@ -1,0 +1,13 @@
+# Production overrides — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# VITE_API_URL must be set in the environment before running, e.g.:
+#   export $(grep -v '^#' frontend/.env | xargs)
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  frontend:
+    build:
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    env_file:
+      - frontend/.env          # VITE_API_TOKEN

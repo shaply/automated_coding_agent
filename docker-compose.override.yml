@@ -1,0 +1,9 @@
+# Development overrides — loaded automatically by `docker compose up`.
+# Do NOT use in production.
+services:
+  frontend:
+    build:
+      args:
+        VITE_API_URL: http://localhost:8094
+    env_file:
+      - frontend/.env          # VITE_API_TOKEN for local dev

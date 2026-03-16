@@ -31,7 +31,7 @@ AutoDev runs on a mini PC as a persistent Docker container, accessible remotely 
 
 ```text
 Mini PC (always on)
-├── Docker: autodev-backend  (Python + FastAPI, port 8000)
+├── Docker: autodev-backend  (Python + FastAPI, port 8094)
 └── Docker: autodev-frontend (Svelte, port 5173)
 ```
 
@@ -87,9 +87,11 @@ Open `frontend/.env` and fill in:
 
 ```ini
 # Required
-VITE_API_URL=http://localhost:8000    # If pulling up website on another computer, then you need to set this address to the address of your mini PC
-VITE_API_TOKEN=change-me-to-match-AUTODEV_API_TOKEN   # Should be same as AUTODEV_API_TOKEN in backend/.env
+VITE_API_URL=http://100.x.x.x:8094   # Production: IP/hostname of your mini PC. Not needed for local dev (localhost:8094 is the default).
+VITE_API_TOKEN=change-me-to-match-AUTODEV_API_TOKEN   # Must match AUTODEV_API_TOKEN in backend/.env
 ```
+
+> **Local dev without Docker:** `VITE_API_URL` defaults to `http://localhost:8094`, so you can leave it unset. `VITE_API_TOKEN` is still required.
 
 ### 3. GitHub bot account (optional but recommended)
 
@@ -103,17 +105,26 @@ To avoid the agent working on issues you're already handling:
 4. Set `github_assignee` in `config.yaml` to the bot's GitHub username
 5. Assign issues to the bot account when you want AutoDev to work on them — unassign to claim them yourself
 
-### 4. Run in Docker (recommended)
+### 4. Run with Docker
+
+**Development** (auto-uses `docker-compose.override.yml`, frontend points to `localhost:8094`):
 
 ```bash
-docker compose up -d
+docker compose up --build
+```
+
+**Production** (uses the `VITE_API_URL` from `frontend/.env` baked into the frontend build):
+
+```bash
+# Export frontend env vars so docker compose can read VITE_API_URL
+export $(grep -v '^#' frontend/.env | xargs)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 Access the UI at `http://localhost:5173`.
-
 With Tailscale: `http://your-mini-pc.tailnet:5173` from anywhere.
 
-### 5. Run locally (development)
+### 5. Run locally without Docker (development)
 
 ```bash
 # Backend
@@ -121,12 +132,12 @@ cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 aider-install         # installs aider-chat — required once after pip install
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8094
 
 # Frontend (separate terminal)
 cd frontend
 npm install
-npm run dev
+npm run dev           # automatically uses localhost:8094 via .env.development
 ```
 
 ## Tech Stack
