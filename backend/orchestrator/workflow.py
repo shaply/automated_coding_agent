@@ -134,7 +134,7 @@ class Workflow:
         Returns True if the step completed successfully (or was skipped by user),
         False if the workflow should halt.
         """
-        # Execute the step (Aider implements the code change)
+        # Execute the step (agent implements the code change)
         result = self.engine.execute_task(step, files=[])
         if not result.success:
             self._log(f"Step {step_idx + 1} failed to execute: {result.error}")

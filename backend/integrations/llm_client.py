@@ -5,6 +5,7 @@ LiteLLM wrapper with:
 - Exponential backoff + jitter on 429s
 - Provider fallback chain (Claude → Gemini → Groq)
 - Respect for Retry-After headers
+- Tool-calling support via chat() method
 """
 
 import os
@@ -84,10 +85,14 @@ class LLMClient:
                 )
                 time.sleep(wait)
 
-    def complete(self, messages: list[dict], **kwargs) -> str:
+    # ------------------------------------------------------------------
+    # Core: route through fallback chain, return raw litellm response
+    # ------------------------------------------------------------------
+
+    def _call_llm(self, messages: list[dict], **kwargs) -> Any:
         """
-        Call the LLM with the given messages, routing through the fallback chain.
-        Returns the response content string.
+        Route the request through the provider fallback chain.
+        Returns the raw litellm response object.
         Raises RuntimeError if all providers are exhausted.
         """
         max_retries = kwargs.pop("max_retries", 5)
@@ -115,14 +120,21 @@ class LLMClient:
                 logger.warning("Provider %s exhausted retries on rate limit. Trying next.", provider)
                 continue
             except litellm.exceptions.BadRequestError as exc:
-                # Treat billing/credit errors as budget exhaustion → fallback, not crash
                 msg = str(exc).lower()
+                # Billing/credit errors → fallback
                 if "credit" in msg or "billing" in msg or "balance" in msg or "quota" in msg:
                     logger.warning(
                         "Provider %s billing error (credit/quota issue) — skipping to next provider. Error: %s",
                         provider, exc,
                     )
                     self._billing_failed.add(provider)
+                    continue
+                # Tool-calling failures (e.g. Groq/Llama can't format tool calls) → fallback
+                if "tool_use_failed" in msg or "failed to call a function" in msg:
+                    logger.warning(
+                        "Provider %s does not support tool calling reliably — skipping to next provider. Error: %s",
+                        provider, exc,
+                    )
                     continue
                 raise  # other bad request errors (e.g. invalid prompt) should propagate
             except ContextWindowExceededError as exc:
@@ -152,13 +164,36 @@ class LLMClient:
                     provider, budget_pct, new_total, daily_budget,
                 )
 
-            content = response.choices[0].message.content
-            return content
+            return response
 
         raise RuntimeError(
             "All providers exhausted — daily budgets depleted or rate limits hit. "
             "Try again tomorrow or add more providers to the fallback chain."
         )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def complete(self, messages: list[dict], **kwargs) -> str:
+        """
+        Call the LLM with the given messages, routing through the fallback chain.
+        Returns the response content string.
+        Raises RuntimeError if all providers are exhausted.
+        """
+        response = self._call_llm(messages, **kwargs)
+        return response.choices[0].message.content
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, **kwargs) -> Any:
+        """
+        Call the LLM with messages and optional tool definitions.
+        Returns the full message object (with .content, .tool_calls, etc.)
+        for use in agentic tool-calling loops.
+        """
+        if tools:
+            kwargs["tools"] = tools
+        response = self._call_llm(messages, **kwargs)
+        return response.choices[0].message
 
     def select_model(self) -> str:
         """

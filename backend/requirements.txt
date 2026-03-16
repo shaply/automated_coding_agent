@@ -8,10 +8,7 @@ pyyaml>=6.0.1
 # LLM routing
 litellm>=1.40.0
 
-# Coding engine
-# aider-install is the meta-installer recommended by aider docs.
-# Running it installs aider-chat properly. See Dockerfile for Docker setup.
-aider-install>=0.2.0
+# Coding engine — uses litellm tool-calling directly (no external engine dependency)
 
 # GitHub + Git
 PyGithub>=2.3.0

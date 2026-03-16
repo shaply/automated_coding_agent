@@ -33,7 +33,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import router
-from engine.aider_engine import AiderEngine
+from engine.goose_engine import GooseEngine
 from integrations.git_client import GitClient, GitSafetyError
 from integrations.github_client import GitHubClient
 from integrations.llm_client import LLMClient
@@ -99,8 +99,7 @@ llm = LLMClient(
 )
 
 # Engine and planner — repo_path is set per-task before the workflow starts
-engine = AiderEngine(
-    model_name=CONFIG["providers"][CONFIG["providers"]["fallback_order"][0]]["model"],
+engine = GooseEngine(
     repo_path="",
     test_command=CONFIG["project"].get("test_command", "pytest"),
     lint_command=CONFIG["project"].get("lint_command", "ruff check ."),
