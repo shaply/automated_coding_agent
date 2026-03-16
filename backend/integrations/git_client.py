@@ -84,7 +84,14 @@ class GitClient:
         return True
 
     def push_branch(self, repo: Repo, branch_name: str) -> None:
-        """Push the feature branch to origin."""
+        """Push the feature branch to origin, force-pushing if the branch already exists."""
         origin = repo.remotes["origin"]
-        origin.push(refspec=f"{branch_name}:{branch_name}")
+        try:
+            result = origin.push(refspec=f"{branch_name}:{branch_name}")
+            # GitPython returns push info; check for non-fast-forward flag
+            if result and result[0].flags & result[0].ERROR:
+                raise GitCommandError("push", result[0].summary)
+        except GitCommandError:
+            logger.warning("Normal push failed for %s — retrying with force push.", branch_name)
+            origin.push(refspec=f"+{branch_name}:{branch_name}")
         logger.info("Pushed branch %s to origin", branch_name)

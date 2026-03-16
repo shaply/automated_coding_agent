@@ -165,6 +165,13 @@ scheduler = AsyncIOScheduler(timezone=CONFIG["schedule"]["timezone"])
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # If the server restarted mid-task, no workflow thread will resume it.
+    # Mark any in-progress states as halted so the UI doesn't get stuck.
+    _stale = {"planning", "awaiting_plan_review", "coding", "awaiting_step_review", "awaiting_diff_review"}
+    if session.state.status in _stale:
+        session.update(status="halted", halt_reason="Server restarted while task was in progress.")
+        logger.warning("Stale session detected on startup — marked as halted.")
+
     if CONFIG["schedule"]["enabled"]:
         run_time = CONFIG["schedule"]["time"]
         hour, minute = run_time.split(":")
@@ -267,8 +274,8 @@ async def run_workflow_async(task: str, issue_number: int | None = None) -> None
 
     def _review_plan_cb(_: list[str]) -> tuple[bool, str | None]:
         while True:
-            app_state["plan_event"].clear()
             app_state["plan_event"].wait()
+            app_state["plan_event"].clear()
             action = app_state["plan_action"]
             if action == "approve":
                 return True, None
@@ -276,8 +283,8 @@ async def run_workflow_async(task: str, issue_number: int | None = None) -> None
                 return False, app_state["plan_comment"]
 
     def _review_diff_cb(_: str) -> bool:
-        app_state["diff_event"].clear()
         app_state["diff_event"].wait()
+        app_state["diff_event"].clear()
         return app_state["diff_action"] == "approve"
 
     def _step_failure_cb(step_idx: int, step: str, test_output: str) -> str:
@@ -285,8 +292,8 @@ async def run_workflow_async(task: str, issue_number: int | None = None) -> None
             status="awaiting_step_review",
             step_failure_info={"step": step_idx, "description": step, "output": test_output},
         )
-        app_state["step_failure_event"].clear()
         app_state["step_failure_event"].wait()
+        app_state["step_failure_event"].clear()
         session.update(status="coding")
         return app_state["step_failure_choice"]
 
