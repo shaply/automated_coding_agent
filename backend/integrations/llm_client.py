@@ -26,6 +26,7 @@ class LLMClient:
         self.providers = providers_config  # keyed by provider name
         self.usage_db = usage_db
         self._last_request_ts: dict[str, float] = {}  # provider → unix timestamp
+        self._billing_failed: set[str] = set()  # providers that hit billing/credit errors this session
 
         # Build effective fallback order: skip providers with no API key configured.
         self.fallback_order: list[str] = []
@@ -121,6 +122,7 @@ class LLMClient:
                         "Provider %s billing error (credit/quota issue) — skipping to next provider. Error: %s",
                         provider, exc,
                     )
+                    self._billing_failed.add(provider)
                     continue
                 raise  # other bad request errors (e.g. invalid prompt) should propagate
             except ContextWindowExceededError as exc:
@@ -157,3 +159,24 @@ class LLMClient:
             "All providers exhausted — daily budgets depleted or rate limits hit. "
             "Try again tomorrow or add more providers to the fallback chain."
         )
+
+    def select_model(self) -> str:
+        """
+        Return the model string of the first provider that:
+        - Has not hit a billing/credit error this session
+        - Still has daily budget remaining
+        Falls back to the first configured provider if all are exhausted.
+        """
+        for provider in self.fallback_order:
+            if provider in self._billing_failed:
+                continue
+            cfg = self.providers[provider]
+            daily_budget = cfg.get("daily_token_budget", float("inf"))
+            used_today = self.usage_db.get_usage(provider)
+            if used_today < daily_budget:
+                return cfg["model"]
+        # All providers exhausted — return first non-billing-failed provider and let it fail naturally
+        for provider in self.fallback_order:
+            if provider not in self._billing_failed:
+                return self.providers[provider]["model"]
+        return self.providers[self.fallback_order[0]]["model"]

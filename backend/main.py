@@ -104,6 +104,7 @@ engine = AiderEngine(
     repo_path="",
     test_command=CONFIG["project"].get("test_command", "pytest"),
     lint_command=CONFIG["project"].get("lint_command", "ruff check ."),
+    llm_client=llm,
 )
 
 planner = Planner(llm=llm, repo_path="")

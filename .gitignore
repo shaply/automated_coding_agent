@@ -50,3 +50,5 @@ frontend/.env.*
 
 # AI
 .claude/
+
+examples/
