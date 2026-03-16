@@ -37,6 +37,7 @@ class AiderEngine(CodingEngine):
             fnames=[str(self.repo_path / f) for f in files],
             auto_commits=False,  # orchestrator controls commits
             io=io,
+            git_dname=str(self.repo_path),  # anchor repo map to cloned repo
         )
         return coder
 
@@ -45,6 +46,8 @@ class AiderEngine(CodingEngine):
             self._coder = self._get_coder(files)
             self._coder.run(task)
             diff = self.get_diff()
+            if not diff.strip():
+                logger.warning("AiderEngine: step produced no file changes — Aider may not have found relevant files.")
             return EngineResult(success=True, diff=diff, files_changed=files)
         except Exception as exc:
             logger.error("AiderEngine.execute_task failed: %s", exc)

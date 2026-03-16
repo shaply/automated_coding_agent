@@ -317,12 +317,22 @@ async def run_workflow_async(task: str, issue_number: int | None = None) -> None
         _cleanup(repo_path)
         return
 
-    # -- 5. Push branch + open PR (if approved) --------------------------
+    # -- 5. Commit changes, push branch + open PR (if approved) ----------
     final_status = session.state.status
     if final_status == "done" and repo is not None and repo_path and git_client.remote_url:
+        commit_msg = f"[AutoDev] {task[:60]}"
+        _repo = repo  # capture for lambda — repo is not None here
+        committed = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: git_client.commit_all(_repo, commit_msg)
+        )
+        if not committed:
+            _log("WARNING: No file changes were made — nothing to commit. Skipping push and PR.")
+            close_stream(task_id)
+            _cleanup(repo_path)
+            return
+
         _log("Pushing branch …")
         try:
-            _repo = repo  # capture for lambda — repo is not None here
             await asyncio.get_event_loop().run_in_executor(
                 None, lambda: git_client.push_branch(_repo, session.state.branch_name)
             )

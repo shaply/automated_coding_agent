@@ -74,6 +74,15 @@ class GitClient:
         branch.checkout()
         logger.info("Checked out feature branch: %s", branch_name)
 
+    def commit_all(self, repo: Repo, message: str) -> bool:
+        """Stage all changes and commit. Returns True if there was anything to commit."""
+        if not repo.is_dirty(untracked_files=True):
+            return False
+        repo.git.add(A=True)
+        repo.index.commit(message)
+        logger.info("Committed all changes: %s", message)
+        return True
+
     def push_branch(self, repo: Repo, branch_name: str) -> None:
         """Push the feature branch to origin."""
         origin = repo.remotes["origin"]
